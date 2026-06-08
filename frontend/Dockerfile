@@ -1,0 +1,1 @@
+# Imagen Nginx para React
