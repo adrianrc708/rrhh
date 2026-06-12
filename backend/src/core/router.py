@@ -4,13 +4,10 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from src.database import get_db
-from src.core.models import Usuario, Notificacion, AuditoriaProgramada
+from src.core.models import Usuario, Nomina, HistorialAprobacion
 from src.core.security import verificar_password, crear_token_acceso
-from src.core.dependencies import obtener_usuario_actual  # Inyectamos tu aduana
-from src.core.schemas import (
-    NotificacionCreate, NotificacionResponse,
-    AuditoriaProgramadaCreate, AuditoriaProgramadaResponse
-)
+from src.core.dependencies import obtener_usuario_actual
+from src.core.services import procesar_detalle_nomina, registrar_auditoria
 
 router = APIRouter()
 
@@ -23,7 +20,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Correo o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     token_acceso = crear_token_acceso(
         data={"sub": usuario.correo, "empresa_id": usuario.empresa_id},
         expires_delta=timedelta(minutes=60)
@@ -41,51 +38,30 @@ def obtener_perfil_usuario(usuario_actual: Usuario = Depends(obtener_usuario_act
         "empresa_id": usuario_actual.empresa_id
     }
 
-# --- RUTAS DE NOTIFICACIONES ---
+@router.post("/nominas/generar")
+def generar_nomina(periodo: str, db: Session = Depends(get_db),
+                   usuario_actual: Usuario = Depends(obtener_usuario_actual)):
+    #Validar permisos
+    if usuario_actual.rol != "Admin":
+        raise HTTPException(status_code=403, detail="No tienes permisos para realizar esta acción")
 
-@router.post("/notificaciones", response_model=NotificacionResponse, status_code=status.HTTP_201_CREATED)
-def crear_notificacion(
-    notificacion: NotificacionCreate, 
-    db: Session = Depends(get_db), 
-    usuario_actual: Usuario = Depends(obtener_usuario_actual)
-):
-    nueva_notificacion = Notificacion(
-        **notificacion.model_dump(),
-        empresa_id=usuario_actual.empresa_id
-    )
-    db.add(nueva_notificacion)
+    #Crear la cabecera de la Nómina
+    nueva_nomina = Nomina(empresa_id=usuario_actual.empresa_id, periodo=periodo)
+    db.add(nueva_nomina)
     db.commit()
-    db.refresh(nueva_notificacion)
-    return nueva_notificacion
+    db.refresh(nueva_nomina)
 
-@router.get("/notificaciones", response_model=list[NotificacionResponse])
-def listar_notificaciones(
-    db: Session = Depends(get_db), 
-    usuario_actual: Usuario = Depends(obtener_usuario_actual)
-):
-    # Solo devuelve notificaciones que pertenezcan a la empresa del usuario en sesión
-    return db.query(Notificacion).filter(Notificacion.empresa_id == usuario_actual.empresa_id).all()
-
-# --- RUTAS DE AUDITORÍAS PROGRAMADAS ---
-
-@router.post("/auditorias", response_model=AuditoriaProgramadaResponse, status_code=status.HTTP_201_CREATED)
-def crear_auditoria(
-    auditoria: AuditoriaProgramadaCreate, 
-    db: Session = Depends(get_db), 
-    usuario_actual: Usuario = Depends(obtener_usuario_actual)
-):
-    nueva_auditoria = AuditoriaProgramada(
-        **auditoria.model_dump(),
-        empresa_id=usuario_actual.empresa_id
-    )
-    db.add(nueva_auditoria)
+    #Llamar al motor de cálculos
+    procesar_detalle_nomina(db, nueva_nomina.id, usuario_actual.usuario_id, 3000.00, 500.00, 350.00)
     db.commit()
-    db.refresh(nueva_auditoria)
-    return nueva_auditoria
 
-@router.get("/auditorias", response_model=list[AuditoriaProgramadaResponse])
-def listar_auditorias(
-    db: Session = Depends(get_db), 
-    usuario_actual: Usuario = Depends(obtener_usuario_actual)
-):
-    return db.query(AuditoriaProgramada).filter(AuditoriaProgramada.empresa_id == usuario_actual.empresa_id).all()
+    #Registrar automáticamente en la auditoría
+    registrar_auditoria(
+        db=db,
+        usuario_id=usuario_actual.usuario_id,
+        accion="GENERAR_NOMINA",
+        modulo="Nómina",
+        detalles={"nomina_id": nueva_nomina.id, "periodo": periodo}
+    )
+
+    return {"mensaje": "Nómina generada y calculada con éxito", "nomina_id": nueva_nomina.id}
