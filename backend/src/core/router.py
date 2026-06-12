@@ -4,9 +4,13 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from src.database import get_db
-from src.core.models import Usuario
+from src.core.models import Usuario, Notificacion, AuditoriaProgramada
 from src.core.security import verificar_password, crear_token_acceso
 from src.core.dependencies import obtener_usuario_actual  # Inyectamos tu aduana
+from src.core.schemas import (
+    NotificacionCreate, NotificacionResponse,
+    AuditoriaProgramadaCreate, AuditoriaProgramadaResponse
+)
 
 router = APIRouter()
 
@@ -36,3 +40,52 @@ def obtener_perfil_usuario(usuario_actual: Usuario = Depends(obtener_usuario_act
         "rol": usuario_actual.rol,
         "empresa_id": usuario_actual.empresa_id
     }
+
+# --- RUTAS DE NOTIFICACIONES ---
+
+@router.post("/notificaciones", response_model=NotificacionResponse, status_code=status.HTTP_201_CREATED)
+def crear_notificacion(
+    notificacion: NotificacionCreate, 
+    db: Session = Depends(get_db), 
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+):
+    nueva_notificacion = Notificacion(
+        **notificacion.model_dump(),
+        empresa_id=usuario_actual.empresa_id
+    )
+    db.add(nueva_notificacion)
+    db.commit()
+    db.refresh(nueva_notificacion)
+    return nueva_notificacion
+
+@router.get("/notificaciones", response_model=list[NotificacionResponse])
+def listar_notificaciones(
+    db: Session = Depends(get_db), 
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+):
+    # Solo devuelve notificaciones que pertenezcan a la empresa del usuario en sesión
+    return db.query(Notificacion).filter(Notificacion.empresa_id == usuario_actual.empresa_id).all()
+
+# --- RUTAS DE AUDITORÍAS PROGRAMADAS ---
+
+@router.post("/auditorias", response_model=AuditoriaProgramadaResponse, status_code=status.HTTP_201_CREATED)
+def crear_auditoria(
+    auditoria: AuditoriaProgramadaCreate, 
+    db: Session = Depends(get_db), 
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+):
+    nueva_auditoria = AuditoriaProgramada(
+        **auditoria.model_dump(),
+        empresa_id=usuario_actual.empresa_id
+    )
+    db.add(nueva_auditoria)
+    db.commit()
+    db.refresh(nueva_auditoria)
+    return nueva_auditoria
+
+@router.get("/auditorias", response_model=list[AuditoriaProgramadaResponse])
+def listar_auditorias(
+    db: Session = Depends(get_db), 
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+):
+    return db.query(AuditoriaProgramada).filter(AuditoriaProgramada.empresa_id == usuario_actual.empresa_id).all()
