@@ -6,7 +6,7 @@ from datetime import timedelta
 from src.database import get_db
 from src.core.models import Usuario, Nomina, HistorialAprobacion
 from src.core.security import verificar_password, crear_token_acceso
-from src.core.dependencies import obtener_usuario_actual
+from src.core.dependencies import obtener_usuario_actual, verificar_rol
 from src.core.services import procesar_detalle_nomina, registrar_auditoria
 
 router = APIRouter()
@@ -40,12 +40,9 @@ def obtener_perfil_usuario(usuario_actual: Usuario = Depends(obtener_usuario_act
 
 @router.post("/nominas/generar")
 def generar_nomina(periodo: str, db: Session = Depends(get_db),
-                   usuario_actual: Usuario = Depends(obtener_usuario_actual)):
-    #Validar permisos
-    if usuario_actual.rol != "Admin":
-        raise HTTPException(status_code=403, detail="No tienes permisos para realizar esta acción")
-
-    #Crear la cabecera de la Nómina
+                   usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"]))):
+    
+    #Crear la cabecera de la Nómina (El Multi-Tenant ya funciona aquí correctamente)
     nueva_nomina = Nomina(empresa_id=usuario_actual.empresa_id, periodo=periodo)
     db.add(nueva_nomina)
     db.commit()

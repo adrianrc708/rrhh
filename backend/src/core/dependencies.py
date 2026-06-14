@@ -30,3 +30,14 @@ def obtener_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = De
         raise excepcion_credenciales
         
     return usuario
+
+# NUEVO: Decorador de roles para proteger rutas
+def verificar_rol(roles_permitidos: list[str]):
+    def role_checker(usuario_actual: Usuario = Depends(obtener_usuario_actual)):
+        if usuario_actual.rol not in roles_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos para realizar esta acción"
+            )
+        return usuario_actual
+    return role_checker
