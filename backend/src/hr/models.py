@@ -16,5 +16,6 @@ class Empleado(Base):
     cargo = Column(String(100), nullable=True)
     departamento = Column(String(100), nullable=True)
     fecha_ingreso = Column(Date, nullable=True)
+    fecha_fin_contrato = Column(Date, nullable=True)
     estado = Column(String(20), default="Activo")
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())

@@ -1,0 +1,51 @@
+# ==========================================
+# Configuración de Security Group AWS (ZKTeco)
+# ==========================================
+# Los dispositivos biométricos ZKTeco se comunican habitualmente a través del puerto 4370 (TCP/UDP).
+# A continuación tienes los comandos para abrir este puerto en tu instancia EC2.
+
+# ------------------------------------------
+# OPCIÓN 1: AWS CLI
+# ------------------------------------------
+# Reemplaza 'sg-0123456789abcdef0' por el ID real de tu Security Group.
+# Reemplaza '0.0.0.0/0' por la IP pública estática de tu red donde está el reloj para mayor seguridad.
+
+# Habilitar 4370 TCP
+aws ec2 authorize-security-group-ingress \
+    --group-id sg-0123456789abcdef0 \
+    --protocol tcp \
+    --port 4370 \
+    --cidr 0.0.0.0/0
+
+# Habilitar 4370 UDP
+aws ec2 authorize-security-group-ingress \
+    --group-id sg-0123456789abcdef0 \
+    --protocol udp \
+    --port 4370 \
+    --cidr 0.0.0.0/0
+
+
+# ------------------------------------------
+# OPCIÓN 2: TERRAFORM
+# ------------------------------------------
+# Si manejas tu infraestructura como código, agrega este bloque a la definición de tu aws_security_group
+
+resource "aws_security_group_rule" "allow_zkteco_tcp" {
+  type              = "ingress"
+  from_port         = 4370
+  to_port           = 4370
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"] # Recomendado: cambiar a ["tu_ip_publica/32"]
+  security_group_id = aws_security_group.mi_sg.id
+  description       = "Comunicacion ZKTeco Biometrico TCP"
+}
+
+resource "aws_security_group_rule" "allow_zkteco_udp" {
+  type              = "ingress"
+  from_port         = 4370
+  to_port           = 4370
+  protocol          = "udp"
+  cidr_blocks       = ["0.0.0.0/0"] # Recomendado: cambiar a ["tu_ip_publica/32"]
+  security_group_id = aws_security_group.mi_sg.id
+  description       = "Comunicacion ZKTeco Biometrico UDP"
+}

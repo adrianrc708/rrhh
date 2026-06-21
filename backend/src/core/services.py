@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
-from src.core.models import EventoAuditoria, DetalleNomina
+from src.core.models import EventoAuditoria, DetalleNomina, Notificacion, Usuario
+from src.hr.models import Empleado
 import json
+from datetime import date, timedelta
 
 def calcular_sueldo_neto(sueldo_base: float, haberes: float, descuentos: float) -> float:
     return (sueldo_base + haberes) - descuentos
@@ -28,3 +30,49 @@ def registrar_auditoria(db: Session, usuario_id: int, accion: str, modulo: str, 
     )
     db.add(nuevo_evento)
     db.commit()
+
+def crear_notificacion(db: Session, empresa_id: int, titulo: str, mensaje: str, usuario_id: int = None):
+    notif = Notificacion(
+        empresa_id=empresa_id,
+        usuario_id=usuario_id,
+        titulo=titulo,
+        mensaje=mensaje
+    )
+    db.add(notif)
+    db.commit()
+    db.refresh(notif)
+    return notif
+
+def verificar_vencimiento_contratos(db: Session):
+    # Buscar empleados cuya fecha de fin de contrato es exactamente en 7 días
+    fecha_limite = date.today() + timedelta(days=7)
+    
+    empleados_por_vencer = db.query(Empleado).filter(
+        Empleado.fecha_fin_contrato == fecha_limite,
+        Empleado.estado == "Activo"
+    ).all()
+    
+    notificaciones_creadas = 0
+    for emp in empleados_por_vencer:
+        # 1. Notificar al empleado
+        mensaje_emp = f"Tu contrato vence en 7 días ({fecha_limite.strftime('%Y-%m-%d')}). Por favor, acércate a RRHH."
+        crear_notificacion(db, emp.empresa_id, "Vencimiento de Contrato Próximo", mensaje_emp, emp.usuario_id)
+        
+        # 2. Notificar a los administradores de la empresa
+        admins = db.query(Usuario).filter(
+            Usuario.empresa_id == emp.empresa_id,
+            Usuario.rol.in_(["Admin", "Administrador"]),
+            Usuario.estado == "Activo"
+        ).all()
+        
+        for admin in admins:
+            # Obtener datos del empleado para el mensaje
+            empleado_info = db.query(Usuario).filter(Usuario.usuario_id == emp.usuario_id).first()
+            nombre_emp = empleado_info.nombre if empleado_info else f"ID {emp.empleado_id}"
+            
+            mensaje_admin = f"El contrato del empleado {nombre_emp} vence en 7 días ({fecha_limite.strftime('%Y-%m-%d')})."
+            crear_notificacion(db, emp.empresa_id, "Alerta: Vencimiento de Contrato", mensaje_admin, admin.usuario_id)
+            
+        notificaciones_creadas += 1 + len(admins)
+        
+    return notificaciones_creadas

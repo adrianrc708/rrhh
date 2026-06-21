@@ -36,3 +36,29 @@ def perfil_usuario(usuario_actual: Usuario = Depends(obtener_usuario_actual)):
         "rol": usuario_actual.rol,
         "empresa_id": usuario_actual.empresa_id,
     }
+
+from src.core.models import Notificacion
+from src.core.services import verificar_vencimiento_contratos
+from typing import List
+from src.core.schemas import NotificacionResponse
+
+@router.get("/notificaciones", response_model=List[NotificacionResponse])
+def listar_notificaciones(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+):
+    notifs = db.query(Notificacion).filter(
+        Notificacion.usuario_id == usuario_actual.usuario_id
+    ).order_by(Notificacion.fecha_creacion.desc()).all()
+    
+    # Adaptar para que devuelva pydantic schema (Pydantic usa booleans, DB usa Boolean ahora)
+    return notifs
+
+@router.post("/notificaciones/verificar-contratos")
+def trigger_verificar_contratos(db: Session = Depends(get_db)):
+    """
+    Endpoint manual para generar notificaciones de vencimiento de contratos.
+    También será ejecutado periódicamente por el cronjob.
+    """
+    creadas = verificar_vencimiento_contratos(db)
+    return {"status": "ok", "notificaciones_creadas": creadas}

@@ -93,3 +93,16 @@ class EventoAuditoria(Base):
     modulo = Column(String(50), nullable=False)
     detalles = Column(Text, nullable=True)
     fecha_evento = Column(TIMESTAMP, server_default=func.now())
+
+from sqlalchemy import Boolean
+
+class Notificacion(Base):
+    __tablename__ = "notificaciones"
+
+    notificacion_id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.empresa_id", ondelete="CASCADE"))
+    usuario_id = Column(Integer, ForeignKey("usuarios.usuario_id", ondelete="CASCADE"), nullable=True)
+    titulo = Column(String(150), nullable=False)
+    mensaje = Column(Text, nullable=False)
+    leido = Column(Boolean, default=False)
+    fecha_creacion = Column(TIMESTAMP, server_default=func.now())

@@ -1,15 +1,26 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.core.scheduler import start_scheduler, stop_scheduler
 
 from src.core.router import router as core_router
 from src.hr.router import router as hr_router
 from src.attendance.router import router as attendance_router
 from src.payroll.router import router as payroll_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Iniciar cronjobs y tareas en segundo plano
+    start_scheduler()
+    yield
+    # Limpiar recursos al apagar
+    stop_scheduler()
+
 app = FastAPI(
     title="SaaS HR API",
     description="Sistema de Recursos Humanos — Módulos: Auth, Empleados, Asistencia, Nómina",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
