@@ -1,9 +1,10 @@
 from src.database import engine, Base, SessionLocal
-# Importar todos los modelos para que create_all los registre
+# Importamos todos los modelos relacionales para el mapeo correcto
 from src.core.models import Empresa, Usuario, Nomina, DetalleNomina, HistorialAprobacion, EventoAuditoria
-from src.hr.models import Empleado
+from src.hr.models import Empleado, Departamento, Cargo, Contrato
 from src.attendance.models import Inasistencia
 from src.core.security import obtener_password_hash
+from datetime import date
 
 print("Creando tablas en PostgreSQL...")
 Base.metadata.create_all(bind=engine)
@@ -11,13 +12,15 @@ Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 if not db.query(Empresa).first():
-    print("Insertando datos de prueba...")
+    print("Insertando datos de prueba relacionales...")
 
+    # 1. Crear Empresa base
     empresa = Empresa(razon_social="Tech SA", ruc="20123456789", plan_suscripcion="Premium")
     db.add(empresa)
     db.commit()
     db.refresh(empresa)
 
+    # 2. Crear Usuarios globales (Cuentas de acceso)
     usuarios = [
         Usuario(empresa_id=empresa.empresa_id, nombre="Adrian Admin",
                 correo="admin@tech.com", password_hash=obtener_password_hash("admin123"), rol="Admin"),
@@ -33,21 +36,80 @@ if not db.query(Empresa).first():
     for u in usuarios:
         db.refresh(u)
 
-    # Crear perfiles de empleado para los usuarios que no son Admin/Gerente
-    empleados_usuarios = [u for u in usuarios if u.rol in ("RRHH", "Empleado")]
-    for u in empleados_usuarios:
-        db.add(Empleado(
+    # 3. Estructurar Árbol Corporativo: Departamentos (RF-04)
+    dept_rrhh = Departamento(empresa_id=empresa.empresa_id, nombre="Recursos Humanos")
+    dept_ops = Departamento(empresa_id=empresa.empresa_id, nombre="Operaciones")
+    db.add_all([dept_rrhh, dept_ops])
+    db.commit()
+    db.refresh(dept_rrhh)
+    db.refresh(dept_ops)
+
+    # 4. Estructurar Árbol Corporativo: Cargos vinculados con JERARQUÍA DE MANDO (RF-04 Corregido)
+    cargo_gerente = Cargo(departamento_id=dept_ops.departamento_id, nombre="Gerente de Operaciones", parent_id=None)
+    db.add(cargo_gerente)
+    db.commit()
+    db.refresh(cargo_gerente)
+
+    cargo_analista = Cargo(departamento_id=dept_rrhh.departamento_id, nombre="Analista RRHH", parent_id=None)
+    cargo_operario = Cargo(departamento_id=dept_ops.departamento_id, nombre="Operario", parent_id=cargo_gerente.cargo_id) # Jerarquía: Reporta al Gerente
+    db.add_all([cargo_analista, cargo_operario])
+    db.commit()
+    db.refresh(cargo_analista)
+    db.refresh(cargo_operario)
+
+    # 5. Crear perfiles de empleado mapeados y sus contratos históricos para TODOS los usuarios (RF-05 y RF-06)
+    for u in usuarios:
+        if u.rol == "Admin":
+            d_id = dept_rrhh.departamento_id
+            c_id = cargo_analista.cargo_id
+            sueldo = 5000.00
+            tipo_c = "Indeterminado"
+        elif u.rol == "RRHH":
+            d_id = dept_rrhh.departamento_id
+            c_id = cargo_analista.cargo_id
+            sueldo = 3000.00
+            tipo_c = "Plazo Fijo"
+        elif u.rol == "Gerente":
+            d_id = dept_ops.departamento_id
+            c_id = cargo_gerente.cargo_id
+            sueldo = 4500.00
+            tipo_c = "Indeterminado"
+        else: # Empleado
+            d_id = dept_ops.departamento_id
+            c_id = cargo_operario.cargo_id
+            sueldo = 2200.00
+            tipo_c = "Plazo Fijo"
+
+        # Guardamos el perfil inyectando explícitamente el nombre del usuario
+        emp = Empleado(
             usuario_id=u.usuario_id,
+            nombre=u.nombre, # Soluciona el problema de "Colaborador X"
             empresa_id=empresa.empresa_id,
-            sueldo_base=3000.00 if u.rol == "RRHH" else 2200.00,
-            horas_contrato_mes=160,
+            departamento_id=d_id,
+            cargo_id=c_id,
             tipo_pension="ONP",
-            cargo="Analista RRHH" if u.rol == "RRHH" else "Operario",
-            departamento="Recursos Humanos" if u.rol == "RRHH" else "Operaciones",
-        ))
+            fecha_ingreso=date.today(),
+            estado="Activo"
+        )
+        db.add(emp)
+        db.commit()
+        db.refresh(emp)
+
+        # Contrato asociado obligatorio
+        contrato = Contrato(
+            empleado_id=emp.empleado_id,
+            tipo_contrato=tipo_c,
+            sueldo_base=sueldo,
+            horas_contrato_mes=160,
+            fecha_inicio=date.today(),
+            estado="Vigente"
+        )
+        db.add(contrato)
+
     db.commit()
 
-    print("Datos de prueba creados:")
+    print("¡Estructura relacional de Recursos Humanos poblada con éxito!")
+    print("Cuentas de prueba listas para usar:")
     print("  Admin:    admin@tech.com    / admin123")
     print("  RRHH:     rrhh@tech.com     / rrhh123")
     print("  Gerente:  gerente@tech.com  / gerente123")

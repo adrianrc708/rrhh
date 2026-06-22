@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: saas_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  backend:
+    build: 
+      context: ./backend  # Busca el Dockerfile dentro de la subcarpeta
+    ports:
+      - '8000:8000'
+    depends_on:
+      - db
+    env_file:
+      - ./backend/.env
+    environment:
+      # Sobreescribimos la ruta hacia el contenedor de PostgreSQL
+      - DATABASE_URL=postgresql://admin:password@db:5432/saas_db
+    volumes:
+      - ./backend:/app # Sincroniza tu código de Python en tiempo real
+    # 🔥 AUTOMATIZACIÓN INCORPORADA: Ejecuta migraciones, puebla la semilla y enciende el servidor
+    command: sh -c "alembic upgrade head && python seed.py && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build:
+      context: ./frontend # Busca el Dockerfile de React
+    ports:
+      - '5173:5173' # Puerto por defecto de Vite
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app # Sincroniza tus componentes .tsx al guardar
+      - /app/node_modules # Evita conflictos con librerías locales
+
+volumes:
+  pg_data:

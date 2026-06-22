@@ -1,0 +1,44 @@
+frontend/                        # RAÍZ DE TU PROYECTO FRONTEND
+├── node_modules/                # Librerías instaladas por npm
+├── src/                         # Carpeta principal de código fuente
+│   ├── components/              # Bloques de construcción visual (Piezas de interfaz)
+│   │   ├── layout/              # Estructura visual compartida por todo el equipo
+│   │   │   ├── Sidebar.tsx      # Barra lateral oscura (Extraída de tu Directorio.tsx)
+│   │   │   └── Header.tsx       # Título superior, datos del administrador y alertas
+│   │   │
+│   │   ├── personal/            # MÓDULO: Gestión de Personal (Gabriel)
+│   │   │   ├── TablaEmpleados.tsx # Solo el diseño y filas de la tabla de colaboradores
+│   │   │   ├── Estructura.tsx   # Tu organigrama jerárquico de cargos (Modificado)
+│   │   │   ├── Contratos.tsx    # Tu gestor e historial de vigencias
+│   │   │   └── FormularioEmpleado.tsx # Tu formulario para dar altas y bajas
+│   │   │
+│   │   ├── asistencia/          # MÓDULO: Asistencia (Roberto - PLACEHOLDER)
+│   │   │   └── Marcaciones.tsx  # Interfaz del control biométrico (Placeholder)
+│   │   │
+│   │   ├── nomina/              # MÓDULO: Nómina (Emanuel - PLACEHOLDER)
+│   │   │   └── Boletas.tsx      # Procesamiento automatizado de boletas (Placeholder)
+│   │   │
+│   │   └── shared/              # Elementos atómicos de UI (Reutilizables por todos)
+│   │       ├── Button.tsx       # Botón global con tokens naranja/outline de Figma
+│   │       └── Badge.tsx        # Etiquetas de estado ("Activo", "Vigente")
+│   │
+│   ├── pages/                   # Vistas completas de la aplicación (Pantallas enteras)
+│   │   ├── Login.tsx            # Pantalla de Login (Mudado desde components/)
+│   │   ├── Dashboard.tsx        # Pantalla principal con gráficos generales
+│   │   └── Personal.tsx         # Tu Página Orquestadora (Aquí mutó tu Directorio.tsx actual)
+│   │
+│   ├── routes/                  # Control de navegación segura
+│   │   └── AppRoutes.tsx        # Enrutador (React Router) para enlazar las páginas
+│   │
+│   ├── services/                # Capa de infraestructura de red
+│   │   └── api.ts               # Tu cliente Axios configurado para peticiones HTTP
+│   │
+│   ├── App.tsx                  # Componente raíz de la aplicación
+│   └── main.tsx                 # Punto de entrada de renderizado de React
+│
+├── .env                         # Variables de entorno locales (Dirección del backend)
+├── Dockerfile                   # Configuración del contenedor Docker de tu front
+├── env.example                  # Plantilla de variables de entorno para tus compañeros
+├── index.html                   # El archivo raíz que carga Vite
+├── package.json                 # Manifiesto de dependencias y scripts de npm
+└── vite.config.ts               # Configuración del empaquetador Vite
