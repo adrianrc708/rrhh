@@ -62,3 +62,4 @@ def trigger_verificar_contratos(db: Session = Depends(get_db)):
     """
     creadas = verificar_vencimiento_contratos(db)
     return {"status": "ok", "notificaciones_creadas": creadas}
+
