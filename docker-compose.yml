@@ -26,6 +26,8 @@ services:
       - DATABASE_URL=postgresql://admin:password@db:5432/saas_db
     volumes:
       - ./backend:/app # Sincroniza tu código de Python en tiempo real
+    # 🔥 AUTOMATIZACIÓN INCORPORADA: Ejecuta migraciones, puebla la semilla y enciende el servidor
+    command: sh -c "alembic upgrade head && python seed.py && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build:
