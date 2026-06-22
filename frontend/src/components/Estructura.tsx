@@ -8,7 +8,7 @@ export default function Estructura() {
 
     const [deptIdSeleccionadoForCargo, setDeptIdSeleccionadoForCargo] = useState<number | null>(null);
     const [nuevoCargoNombre, setNuevoCargoNombre] = useState('');
-    const [cargoParentId, setCargoParentId] = useState(''); // <-- NUEVO: Estado para capturar el jefe directo (parent_id)
+    const [cargoParentId, setCargoParentId] = useState('');
 
     const cargarEstructura = async () => {
         try {
@@ -42,7 +42,6 @@ export default function Estructura() {
         cargarEstructura();
     }, []);
 
-    // Helper para buscar el nombre del puesto superior (Jefe Directo)
     const obtenerNombreCargoPadre = (cargosDelDept: any[], pId: number | null) => {
         if (!pId) return null;
         const padre = cargosDelDept.find((c: any) => c.cargo_id === pId);
@@ -54,7 +53,6 @@ export default function Estructura() {
         if (!nuevoDept.trim()) return;
 
         try {
-            // El backend ya no espera un parent_id aquí (RF-04 Corregido)
             await api.post('/empleados/departamentos', { nombre: nuevoDept.trim() });
             setNuevoDept('');
             cargarEstructura();
@@ -69,14 +67,13 @@ export default function Estructura() {
         if (!nuevoCargoNombre.trim()) return;
 
         try {
-            // Enviamos el payload estructurado con la jerarquía de puestos hacia el backend
             await api.post('/empleados/cargos', {
                 nombre: nuevoCargoNombre.trim(),
                 departamento_id: deptoId,
                 parent_id: cargoParentId ? Number(cargoParentId) : null
             });
             setNuevoCargoNombre('');
-            setCargoParentId(''); // Limpiamos el selector de reportes
+            setCargoParentId('');
             setDeptIdSeleccionadoForCargo(null);
             cargarEstructura();
         } catch (err) {
@@ -98,11 +95,12 @@ export default function Estructura() {
     };
 
     return (
-        <div style={{ fontFamily: 'sans-serif', marginTop: '20px' }}>
-            <h3>Estructura Organizacional</h3>
-            <p style={{ color: '#6b7280', fontSize: '14px' }}>Gestión avanzada de departamentos funcionales y puestos de trabajo con jerarquías de mando (RF-04).</p>
+        <div style={{ fontFamily: 'sans-serif', marginTop: '10px' }}>
+            <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', color: '#111827' }}>Estructura Organizacional</h3>
+            {/* 🔥 MODIFICADO: Se removió la etiqueta (RF-04) */}
+            <p style={{ color: '#6b7280', fontSize: '14px', margin: '0 0 20px 0' }}>Gestión avanzada de departamentos funcionales y puestos de trabajo con jerarquías de mando.</p>
 
-            {/* Formulario de creación de Área Simplificado */}
+            {/* Formulario de creación de Área en NARANJA */}
             <form onSubmit={handleCrearDepartamento} style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
                 <input
                     type="text"
@@ -112,7 +110,8 @@ export default function Estructura() {
                     style={{ padding: '10px', width: '300px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '14px' }}
                     required
                 />
-                <button type="submit" style={{ padding: '10px 15px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
+                {/* 🔥 MODIFICADO: Color cambiado a naranja de la plataforma */}
+                <button type="submit" style={{ padding: '10px 18px', backgroundColor: '#f97316', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
                     + Crear Área
                 </button>
             </form>
@@ -124,7 +123,8 @@ export default function Estructura() {
                     {departamentos.map((dept: any) => (
                         <div key={dept.departamento_id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #3b82f6', paddingBottom: '8px' }}>
+                            {/* 🔥 MODIFICADO: Línea de acento cambiada al azul marino corporativo */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #1A1C4b', paddingBottom: '8px' }}>
                                 <strong style={{ fontSize: '15px', color: '#1f2937' }}>{dept.nombre} (ID: {dept.departamento_id})</strong>
                                 <button
                                     onClick={() => handleEliminarDepartamento(dept.departamento_id, dept.nombre)}
@@ -139,19 +139,19 @@ export default function Estructura() {
                                     <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', margin: 0 }}>Línea de Mando Interna:</p>
 
                                     {deptIdSeleccionadoForCargo !== dept.departamento_id && (
+                                        /* 🔥 MODIFICADO: Enlace "+ Añadir Cargo" ahora es naranja */
                                         <button
                                             onClick={() => {
                                                 setCargoParentId('');
                                                 setDeptIdSeleccionadoForCargo(dept.departamento_id);
                                             }}
-                                            style={{ backgroundColor: 'transparent', color: '#2563eb', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', padding: 0 }}
+                                            style={{ backgroundColor: 'transparent', color: '#f97316', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', padding: 0 }}
                                         >
                                             + Añadir Cargo
                                         </button>
                                     )}
                                 </div>
 
-                                {/* Formulario de Creación de Puesto con Selector Jerárquico Integrado */}
                                 {deptIdSeleccionadoForCargo === dept.departamento_id && (
                                     <form onSubmit={(e) => handleCrearCargo(e, dept.departamento_id)} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px', backgroundColor: '#f9fafb', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                                         <input
@@ -191,7 +191,6 @@ export default function Estructura() {
                                     </form>
                                 )}
 
-                                {/* Listado de Cargos con visualización de Jefaturas */}
                                 <ul style={{ paddingLeft: '0', margin: 0, fontSize: '13px', color: '#374151', listStyleType: 'none' }}>
                                     {dept.cargos && dept.cargos.length > 0 ? (
                                         dept.cargos.map((cargo: any) => {
@@ -203,20 +202,20 @@ export default function Estructura() {
                                                         <span style={{ fontWeight: 'bold', color: '#1f2937' }}>{cargo.nombre}</span>
                                                     </div>
 
-                                                    {/* Etiqueta de reporte jerárquico funcional */}
                                                     {nombreJefe && (
                                                         <div style={{ marginTop: '2px' }}>
-                                                            <span style={{ color: '#ff5a1f', fontSize: '11px', fontWeight: '500' }}>
+                                                            {/* Cambiado a un tono coral/naranja coherente */}
+                                                            <span style={{ color: '#f97316', fontSize: '11px', fontWeight: '500' }}>
                                                                 🗲 Reporta a: <strong style={{ color: '#b43403' }}>{nombreJefe}</strong>
                                                             </span>
                                                         </div>
                                                     )}
 
-                                                    {/* Renderizado dinámico de nombres de empleados bajo el cargo */}
                                                     <div style={{ paddingLeft: '5px', marginTop: '6px', fontSize: '12px', color: '#4b5563', borderTop: '1px dashed #e5e7eb', paddingTop: '4px' }}>
                                                         {cargo.colaboradoresAsignados && cargo.colaboradoresAsignados.length > 0 ? (
                                                             cargo.colaboradoresAsignados.map((colab: any) => (
-                                                                <div key={colab.empleado_id} style={{ fontStyle: 'italic', color: '#2563eb', fontWeight: '500' }}>
+                                                                /* Cambiado a la paleta navy de la app */
+                                                                <div key={colab.empleado_id} style={{ fontStyle: 'italic', color: '#1A1C4b', fontWeight: '500' }}>
                                                                     • {colab.nombre || `Empleado ID ${colab.empleado_id}`}
                                                                 </div>
                                                             ))
