@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from src.core.models import EventoAuditoria, DetalleNomina, Notificacion, Usuario
-from src.hr.models import Empleado
+from src.hr.models import Empleado, Contrato
 import json
 from datetime import date, timedelta
 
@@ -21,7 +21,8 @@ def procesar_detalle_nomina(db: Session, nomina_id: int, empleado_id: int, base:
     return nuevo_detalle
 
 def registrar_auditoria(db: Session, usuario_id: int, accion: str, modulo: str, detalles: dict = None):
-    detalles_str = json.dumps(detalles) if detalles else None
+    # default=str permite serializar Decimal, date y datetime sin romper
+    detalles_str = json.dumps(detalles, default=str) if detalles else None
     nuevo_evento = EventoAuditoria(
         usuario_id=usuario_id,
         accion=accion,
@@ -44,16 +45,22 @@ def crear_notificacion(db: Session, empresa_id: int, titulo: str, mensaje: str, 
     return notif
 
 def verificar_vencimiento_contratos(db: Session):
-    # Buscar empleados cuya fecha de fin de contrato es exactamente en 7 días
+    # Buscar contratos vigentes cuya fecha de fin es exactamente en 7 días
     fecha_limite = date.today() + timedelta(days=7)
-    
-    empleados_por_vencer = db.query(Empleado).filter(
-        Empleado.fecha_fin_contrato == fecha_limite,
-        Empleado.estado == "Activo"
+
+    contratos_por_vencer = db.query(Contrato).filter(
+        Contrato.fecha_fin == fecha_limite,
+        Contrato.estado == "Vigente"
     ).all()
-    
+
     notificaciones_creadas = 0
-    for emp in empleados_por_vencer:
+    for contrato in contratos_por_vencer:
+        emp = db.query(Empleado).filter(
+            Empleado.empleado_id == contrato.empleado_id,
+            Empleado.estado == "Activo"
+        ).first()
+        if not emp:
+            continue
         # 1. Notificar al empleado
         mensaje_emp = f"Tu contrato vence en 7 días ({fecha_limite.strftime('%Y-%m-%d')}). Por favor, acércate a RRHH."
         crear_notificacion(db, emp.empresa_id, "Vencimiento de Contrato Próximo", mensaje_emp, emp.usuario_id)

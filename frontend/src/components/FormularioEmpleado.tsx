@@ -200,8 +200,8 @@ export default function FormularioEmpleado({ isOpen, onClose, onSave, empleadoAE
 
                     {/* Botoneras */}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '15px', borderTop: '1px solid #e5e7eb', paddingTop: '15px' }}>
-                        <button type="button" onClick={onClose} style={{ padding: '10px 15px', backgroundColor: '#9ca3af', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Cancelar</button>
-                        <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>{empleadoAEditar ? 'Guardar Cambios' : 'Registrar Colaborador'}</button>
+                        <button type="button" onClick={onClose} style={{ padding: '10px 16px', backgroundColor: '#fff', color: '#374151', border: '1px solid #EAECF2', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>Cancelar</button>
+                        <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>{empleadoAEditar ? 'Guardar Cambios' : 'Registrar Colaborador'}</button>
                     </div>
 
                 </form>

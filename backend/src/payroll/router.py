@@ -29,14 +29,17 @@ def _get_nomina_empresa(nomina_id: int, empresa_id: int, db: Session) -> Nomina:
 def _construir_boleta(detalle: DetalleNomina, nomina: Nomina, db: Session) -> BoletaEmpleado:
     usuario = db.query(Usuario).filter(Usuario.usuario_id == detalle.usuario_id).first()
     empleado = db.query(Empleado).filter(Empleado.usuario_id == detalle.usuario_id).first()
+    # El cargo y el departamento se resuelven por relación (no son atributos directos de Empleado)
+    cargo_nombre = empleado.cargo_rel.nombre if empleado and empleado.cargo_rel else None
+    departamento_nombre = empleado.departamento_rel.nombre if empleado and empleado.departamento_rel else None
     return BoletaEmpleado(
         detalle_id=detalle.id,
         nomina_id=detalle.nomina_id,
         empleado_id=empleado.empleado_id if empleado else None,
         usuario_id=detalle.usuario_id,
-        nombre_empleado=usuario.nombre if usuario else "N/A",
-        cargo=empleado.cargo if empleado else None,
-        departamento=empleado.departamento if empleado else None,
+        nombre_empleado=(empleado.nombre if empleado and empleado.nombre else (usuario.nombre if usuario else "N/A")),
+        cargo=cargo_nombre,
+        departamento=departamento_nombre,
         periodo=nomina.periodo,
         horas_contrato_mes=detalle.horas_contrato_mes,
         horas_trabajadas=detalle.horas_trabajadas,

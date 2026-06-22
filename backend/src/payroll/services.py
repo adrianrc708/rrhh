@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import HTTPException, status
 
 from src.core.models import Nomina, DetalleNomina, HistorialAprobacion, Usuario
-from src.hr.models import Empleado
+from src.hr.models import Empleado, Contrato
 from src.attendance.models import Inasistencia, TIPOS_QUE_DESCUENTAN
 from src.payroll.calculations import calcular_planilla_empleado
 
@@ -114,6 +114,15 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
     total_essalud = Decimal("0")
 
     for empleado in empleados:
+        # Sueldo y horas viven en el Contrato vigente, no en Empleado
+        contrato = db.query(Contrato).filter(
+            Contrato.empleado_id == empleado.empleado_id,
+            Contrato.estado == "Vigente",
+        ).first()
+
+        if not contrato:
+            continue  # Empleado sin contrato vigente: se omite de la planilla
+
         # RF-17: obtener inasistencias que generan descuento para el periodo
         inasistencias = db.query(Inasistencia).filter(
             Inasistencia.empleado_id == empleado.empleado_id,
@@ -128,8 +137,8 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
 
         # RF-11: motor de cálculo
         resultado = calcular_planilla_empleado(
-            sueldo_base=Decimal(str(empleado.sueldo_base)),
-            horas_contrato_mes=Decimal(str(empleado.horas_contrato_mes or 160)),
+            sueldo_base=Decimal(str(contrato.sueldo_base)),
+            horas_contrato_mes=Decimal(str(contrato.horas_contrato_mes or 160)),
             horas_ausentes_injustificadas=Decimal(str(horas_a_descontar)),
             tipo_pension=empleado.tipo_pension or "ONP",
             porcentaje_afp=Decimal(str(empleado.porcentaje_afp)) if empleado.porcentaje_afp else None,

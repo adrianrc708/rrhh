@@ -84,7 +84,7 @@ export default function Contratos() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Seleccionar Colaborador:</label>
-                            <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '13px' }} required>
+                            <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required>
                                 <option value="">-- Seleccione un empleado --</option>
                                 {empleados.map((e: any) => (
                                     <option key={e.empleado_id} value={e.empleado_id}>
@@ -96,7 +96,7 @@ export default function Contratos() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Tipo de Contrato:</label>
-                            <select value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '13px' }}>
+                            <select value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box' }}>
                                 <option value="Plazo Fijo (Temporal)">Plazo Fijo (Temporal)</option>
                                 <option value="Indeterminado">Indeterminado</option>
                                 <option value="Part-Time">Part-Time</option>
@@ -105,24 +105,24 @@ export default function Contratos() {
                         </div>
 
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Sueldo Base (S/.):</label>
-                                <input type="number" value={sueldoBase} onChange={(e) => setSueldoBase(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }} required />
+                                <input type="number" value={sueldoBase} onChange={(e) => setSueldoBase(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required />
                             </div>
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Horas al Mes:</label>
-                                <input type="number" value={horasMes} onChange={(e) => setHorasMes(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }} required />
+                                <input type="number" value={horasMes} onChange={(e) => setHorasMes(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required />
                             </div>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Fecha Inicio:</label>
-                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }} required />
+                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required />
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Fecha Fin (Opcional):</label>
-                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }} />
+                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} />
                         </div>
 
                         {/* 🔥 MODIFICADO: Color cambiado a naranja de la plataforma */}

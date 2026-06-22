@@ -37,10 +37,11 @@ def perfil_usuario(usuario_actual: Usuario = Depends(obtener_usuario_actual)):
         "empresa_id": usuario_actual.empresa_id,
     }
 
-from src.core.models import Notificacion
+from src.core.models import Notificacion, EventoAuditoria
 from src.core.services import verificar_vencimiento_contratos
 from typing import List
 from src.core.schemas import NotificacionResponse
+import json
 
 @router.get("/notificaciones", response_model=List[NotificacionResponse])
 def listar_notificaciones(
@@ -62,4 +63,38 @@ def trigger_verificar_contratos(db: Session = Depends(get_db)):
     """
     creadas = verificar_vencimiento_contratos(db)
     return {"status": "ok", "notificaciones_creadas": creadas}
+
+
+@router.get("/auditoria")
+def listar_eventos_auditoria(
+    limite: int = 100,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
+):
+    """Registro de auditoría: acciones de los usuarios de la empresa (RF-16)."""
+    eventos = (
+        db.query(EventoAuditoria, Usuario.nombre)
+        .join(Usuario, EventoAuditoria.usuario_id == Usuario.usuario_id)
+        .filter(Usuario.empresa_id == usuario_actual.empresa_id)
+        .order_by(EventoAuditoria.fecha_evento.desc())
+        .limit(limite)
+        .all()
+    )
+    salida = []
+    for ev, nombre in eventos:
+        detalles = None
+        if ev.detalles:
+            try:
+                detalles = json.loads(ev.detalles)
+            except Exception:
+                detalles = ev.detalles
+        salida.append({
+            "id": ev.id,
+            "usuario": nombre,
+            "accion": ev.accion,
+            "modulo": ev.modulo,
+            "detalles": detalles,
+            "fecha_evento": ev.fecha_evento,
+        })
+    return salida
 

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import api from '../services/api';
+import { colors, radius, font, shadow } from '../theme';
+import Icon from './Icons';
+import { Btn } from './ui';
 
 interface LoginProps {
-    setAuth: (val: boolean) => void;
+    onLogin: (user: { nombre: string; rol: string; correo: string }) => void;
 }
 
-export default function Login({ setAuth }: LoginProps) {
+export default function Login({ onLogin }: LoginProps) {
     const [correo, setCorreo] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -15,108 +18,89 @@ export default function Login({ setAuth }: LoginProps) {
         e.preventDefault();
         setError('');
         setCargando(true);
-
         try {
             const formData = new URLSearchParams();
             formData.append('username', correo);
             formData.append('password', password);
 
-            const respuesta = await api.post('/core/login', formData, {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            const resp = await api.post('/core/login', formData, {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             });
+            localStorage.setItem('token', resp.data.access_token);
 
-            localStorage.setItem('token', respuesta.data.access_token);
-
-            // CONTROL INTELIGENTE: Si el backend no adjunta 'user', deducimos el rol por el correo
-            if (respuesta.data.user) {
-                localStorage.setItem('user', JSON.stringify(respuesta.data.user));
-            } else {
-                let rolDetectado = 'Personal';
-                let nombreProvisional = correo.split('@')[0].toUpperCase();
-
-                if (correo.includes('admin')) {
-                    rolDetectado = 'Admin';
-                } else if (correo.includes('rrhh')) {
-                    rolDetectado = 'RRHH';
-                } else if (correo.includes('gerente')) {
-                    rolDetectado = 'Gerente';
-                } else if (correo.includes('empleada')) {
-                    rolDetectado = 'Empleado';
-                }
-
-                localStorage.setItem('user', JSON.stringify({
-                    nombre: nombreProvisional,
-                    rol: rolDetectado
-                }));
-            }
-
-            // Dejamos un solo setAuth para cambiar de pantalla
-            setAuth(true);
-
+            // Traemos el perfil real del usuario autenticado
+            let user = { nombre: correo.split('@')[0], rol: 'Usuario', correo };
+            try {
+                const me = await api.get('/core/usuarios/me');
+                user = { nombre: me.data.nombre, rol: me.data.rol, correo: me.data.correo };
+            } catch { /* fallback al provisional */ }
+            localStorage.setItem('user', JSON.stringify(user));
+            onLogin(user);
         } catch (err: any) {
-            console.error("Error capturado en Login:", err);
-            if (err.response && err.response.data) {
-                const detail = err.response.data.detail;
-                if (typeof detail === 'object') {
-                    setError(JSON.stringify(detail));
-                } else {
-                    setError(String(detail) || 'Credenciales incorrectas');
-                }
-            } else {
-                setError('No se pudo establecer conexión con el servidor backend');
-            }
+            const detail = err?.response?.data?.detail;
+            setError(typeof detail === 'string' ? detail : (detail ? JSON.stringify(detail) : 'No se pudo conectar con el servidor.'));
         } finally {
             setCargando(false);
         }
     };
 
     return (
-        <div style={styles.contenedor}>
-            <div style={styles.tarjeta}>
-                <h2 style={styles.titulo}>Omnia HR — Iniciar Sesión</h2>
-                <p style={styles.subtitulo}>Ingresa tus credenciales de Tech SA</p>
+        <div style={{ display: 'flex', minHeight: '100vh', fontFamily: font }}>
+            {/* Panel de marca */}
+            <div style={{
+                flex: 1, background: `linear-gradient(160deg, ${colors.navy900}, ${colors.navy700})`,
+                color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: radius.md, background: colors.orange, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name="building" size={26} color="#fff" />
+                    </div>
+                    <h1 style={{ margin: 0, fontSize: 30, fontWeight: 800 }}>Omnia</h1>
+                </div>
+                <p style={{ fontSize: 18, lineHeight: 1.6, color: 'rgba(255,255,255,0.8)', maxWidth: 440 }}>
+                    Gestión centralizada de personal, asistencia y nómina con analítica predictiva de IA.
+                </p>
+                <div style={{ display: 'flex', gap: 28, marginTop: 40 }}>
+                    {[['Personal', 'users'], ['Asistencia', 'clock'], ['Nómina', 'dollar'], ['Auditoría', 'shield']].map(([t, ic]) => (
+                        <div key={t} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'rgba(255,255,255,0.85)' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: radius.md, background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Icon name={ic} size={22} />
+                            </div>
+                            <span style={{ fontSize: 12.5 }}>{t}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
-                {/* Renderizado seguro: 'error' ahora está garantizado que es un string */}
-                {error && <div style={styles.error}>{error}</div>}
+            {/* Panel de formulario */}
+            <div style={{ width: 480, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, background: colors.bg }}>
+                <div style={{ width: '100%', maxWidth: 360, background: '#fff', padding: 36, borderRadius: radius.lg, boxShadow: shadow.card, border: `1px solid ${colors.border}` }}>
+                    <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: colors.textStrong }}>Iniciar Sesión</h2>
+                    <p style={{ margin: '0 0 24px', fontSize: 14, color: colors.textMuted }}>Ingresa tus credenciales corporativas</p>
 
-                <form onSubmit={handleLogin} style={styles.formulario}>
-                    <label style={styles.label}>Correo Electrónico</label>
-                    <input
-                        type="email"
-                        value={correo}
-                        onChange={(e) => setCorreo(e.target.value)}
-                        placeholder="rrhh@tech.com"
-                        required
-                        style={styles.input}
-                    />
+                    {error && (
+                        <div style={{ background: colors.redSoft, color: colors.redText, padding: '10px 12px', borderRadius: radius.sm, marginBottom: 18, fontSize: 13 }}>
+                            {error}
+                        </div>
+                    )}
 
-                    <label style={styles.label}>Contraseña</label>
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        style={styles.input}
-                    />
-
-                    <button type="submit" disabled={cargando} style={styles.boton}>
-                        {cargando ? 'Autenticando...' : 'Ingresar al Sistema'}
-                    </button>
-                </form>
+                    <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Correo electrónico</label>
+                            <input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} required placeholder="admin@tech.com"
+                                style={{ padding: '11px 12px', borderRadius: radius.sm, border: `1px solid ${colors.border}`, fontSize: 14, fontFamily: font, outline: 'none' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Contraseña</label>
+                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••"
+                                style={{ padding: '11px 12px', borderRadius: radius.sm, border: `1px solid ${colors.border}`, fontSize: 14, fontFamily: font, outline: 'none' }} />
+                        </div>
+                        <Btn type="submit" variant="orange" disabled={cargando} style={{ width: '100%', marginTop: 6, padding: '12px' }}>
+                            {cargando ? 'Autenticando…' : 'Ingresar al Sistema'}
+                        </Btn>
+                    </form>
+                </div>
             </div>
         </div>
     );
 }
-
-const styles = {
-    contenedor: { display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f4f6' },
-    tarjeta: { backgroundColor: '#ffffff', padding: '40px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' },
-    titulo: { margin: '0 0 10px 0', fontSize: '24px', textAlign: 'center' as const, color: '#1f2937' },
-    subtitulo: { margin: '0 0 20px 0', fontSize: '14px', textAlign: 'center' as const, color: '#6b7280' },
-    error: { backgroundColor: '#fee2e2', color: '#991b1b', padding: '10px', borderRadius: '4px', marginBottom: '20px', fontSize: '14px', textAlign: 'center' as const, wordBreak: 'break-word' as const },
-    formulario: { display: 'flex', flexDirection: 'column' as const },
-    label: { marginBottom: '5px', fontSize: '14px', fontWeight: 'bold', color: '#374151' },
-    input: { padding: '10px', marginBottom: '20px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '16px' },
-    boton: { padding: '12px', backgroundColor: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }
-};
