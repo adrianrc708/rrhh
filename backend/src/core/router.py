@@ -2,14 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
+import json
 
 from src.database import get_db
 from src.core.models import Usuario
 from src.core.security import verificar_password, crear_token_acceso, obtener_password_hash
 from src.core.dependencies import obtener_usuario_actual, verificar_rol
-from src.core.schemas import UsuarioCreate, UsuarioResponse, RegistroEmpresaCreate
-from src.core.models import Empresa
+from src.core.schemas import UsuarioCreate, UsuarioResponse, RegistroEmpresaCreate, NotificacionResponse
+from src.core.models import Empresa, Notificacion, EventoAuditoria
+from src.core.services import verificar_vencimiento_contratos
 
 router = APIRouter()
 

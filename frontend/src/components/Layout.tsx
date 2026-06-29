@@ -63,7 +63,7 @@ export default function Layout({
                         <p style={{ margin: '6px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Gestión centralizada SaaS</p>
                     </div>
                     <nav style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {NAV.filter(i => !i.adminOnly || user.rol === 'SuperAdmin').map((item) => (
+                        {NAV.filter(i => user.rol === 'SuperAdmin' ? i.adminOnly : !i.adminOnly).map((item) => (
                             <NavItem key={item.key} item={item as any} active={active === item.key} onClick={() => onNavigate(item.key)} />
                         ))}
                     </nav>

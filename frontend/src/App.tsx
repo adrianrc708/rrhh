@@ -29,7 +29,7 @@ export default function App() {
     // Si ya está autenticado, ir directo a la app
     const [stage, setStage] = useState<AppStage>(token && savedUser ? 'app' : 'landing');
     const [user, setUser] = useState<any>(savedUser);
-    const [section, setSection] = useState<SectionKey>('dashboard');
+    const [section, setSection] = useState<SectionKey>(savedUser?.rol === 'SuperAdmin' ? 'admin' : 'dashboard');
 
     const logout = () => {
         localStorage.clear();
@@ -51,7 +51,7 @@ export default function App() {
                 onLogin={(u) => {
                     setUser(u);
                     setStage('app');
-                    setSection('dashboard');
+                    setSection(u.rol === 'SuperAdmin' ? 'admin' : 'dashboard');
                 }}
                 onBack={() => setStage('landing')}
             />

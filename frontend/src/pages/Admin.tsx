@@ -28,7 +28,7 @@ export default function Admin() {
     useEffect(() => {
         const fetchEmpresas = async () => {
             try {
-                const res = await api.get('/api/admin/empresas');
+                const res = await api.get('/admin/empresas');
                 setEmpresas(res.data);
             } catch (err: any) {
                 setError(err.response?.data?.detail || 'Error al cargar las empresas');
