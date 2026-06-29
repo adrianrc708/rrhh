@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
-import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, tableStyles, inputStyle, Field, downloadCSV } from '../components/ui';
+import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, tableStyles, inputStyle, Field, downloadCSV, useToast } from '../components/ui';
 
 const money = (n: any) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ESTADO_TONE: Record<string, any> = { Borrador: 'gray', Revision: 'amber', Aprobado: 'blue', Pagado: 'green' };
 
 function ModalNomina({ onClose, onSaved }: { onClose: () => void; onSaved: (id: number) => void }) {
+    const toast = useToast();
     const [periodo, setPeriodo] = useState('');
     const [guardando, setGuardando] = useState(false);
     const crear = async (e: React.FormEvent) => {
@@ -17,9 +18,10 @@ function ModalNomina({ onClose, onSaved }: { onClose: () => void; onSaved: (id: 
             setGuardando(true);
             const res = await api.post('/nominas/', { periodo });
             onSaved(res.data.id); onClose();
+            toast('success', 'Nómina creada correctamente en estado Borrador.');
         } catch (err: any) {
             console.error(err);
-            alert(err?.response?.data?.detail || 'No se pudo crear la nómina.');
+            toast('error', err?.response?.data?.detail || 'No se pudo crear la nómina.');
         } finally { setGuardando(false); }
     };
     return (
@@ -40,6 +42,7 @@ function ModalNomina({ onClose, onSaved }: { onClose: () => void; onSaved: (id: 
 }
 
 export default function Nomina() {
+    const toast = useToast();
     const [tab, setTab] = useState('Cálculo de Planilla');
     const [nominas, setNominas] = useState<any[]>([]);
     const [selId, setSelId] = useState<number | null>(null);
@@ -82,11 +85,11 @@ export default function Nomina() {
         try {
             setAccion(true);
             const res = await api.post(`/nominas/${selId}/consolidar`);
-            alert(`Planilla consolidada: ${res.data.empleados_procesados} empleados procesados.`);
+            toast('success', `Planilla consolidada: ${res.data.empleados_procesados} empleados procesados.`);
             cargarDetalle(selId); cargarNominas(selId);
         } catch (err: any) {
             console.error(err);
-            alert(err?.response?.data?.detail || 'No se pudo consolidar.');
+            toast('error', err?.response?.data?.detail || 'No se pudo consolidar.');
         } finally { setAccion(false); }
     };
 
@@ -95,10 +98,11 @@ export default function Nomina() {
         try {
             setAccion(true);
             await api.patch(`/nominas/${selId}/estado`, { nuevo_estado });
+            toast('success', `Estado actualizado a "${nuevo_estado}" correctamente.`);
             cargarDetalle(selId); cargarNominas(selId);
         } catch (err: any) {
             console.error(err);
-            alert(err?.response?.data?.detail || 'No se pudo cambiar el estado.');
+            toast('error', err?.response?.data?.detail || 'No se pudo cambiar el estado.');
         } finally { setAccion(false); }
     };
 

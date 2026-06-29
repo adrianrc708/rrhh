@@ -1,6 +1,7 @@
 import React from 'react';
 import { colors, radius, font } from '../theme';
 import Icon from './Icons';
+import { OmniaLogo } from './OmniaLogo';
 
 export type SectionKey = 'dashboard' | 'personal' | 'asistencia' | 'nomina' | 'auditoria';
 
@@ -56,9 +57,9 @@ export default function Layout({
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>
                 <div>
-                    <div style={{ padding: '26px 22px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>Omnia</h2>
-                        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Gestión centralizada SaaS</p>
+                    <div style={{ padding: '16px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                        <OmniaLogo variant="compact" width={150} />
+                        <p style={{ margin: '6px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Gestión centralizada SaaS</p>
                     </div>
                     <nav style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {NAV.map((item) => (

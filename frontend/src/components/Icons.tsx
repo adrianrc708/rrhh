@@ -94,6 +94,12 @@ const PATHS: Record<string, React.ReactNode> = {
             <path d="M12 9v4M12 17h.01" />
         </>
     ),
+    info: (
+        <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8h.01M12 12v4" />
+        </>
+    ),
     calendar: (
         <>
             <rect x="3" y="4" width="18" height="18" rx="2" />

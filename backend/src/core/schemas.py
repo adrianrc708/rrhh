@@ -1,6 +1,32 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
+
+# --- Esquema de Registro Público (nueva empresa + admin) ---
+
+class RegistroEmpresaCreate(BaseModel):
+    empresa_nombre: str
+    nombre: str
+    correo: str
+    password: str
+
+# --- Esquemas para Usuarios ---
+
+class UsuarioCreate(BaseModel):
+    nombre: str
+    correo: str
+    password: str
+    rol: str  # Admin | RRHH | Gerente | Empleado
+
+class UsuarioResponse(BaseModel):
+    usuario_id: int
+    nombre: str
+    correo: str
+    rol: str
+    estado: str
+
+    class Config:
+        from_attributes = True
 
 # --- Esquemas para Notificaciones ---
 

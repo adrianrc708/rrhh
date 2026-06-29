@@ -5,7 +5,11 @@ export default defineConfig({
 
     plugins: [react()],
     server: {
-        host: true, // Vital para la exposición de puertos en Docker
-        port: 5173
+        host: true,
+        port: 5173,
+        watch: {
+            usePolling: true, // Necesario para detectar cambios en Windows + Docker
+            interval: 1000,
+        }
     }
 })

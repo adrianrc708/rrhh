@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { useToast } from './ui';
 
 export default function Estructura() {
+    const toast = useToast();
     const [departamentos, setDepartamentos] = useState([]);
     const [cargando, setCargando] = useState(true);
     const [nuevoDept, setNuevoDept] = useState('');
@@ -56,9 +58,10 @@ export default function Estructura() {
             await api.post('/empleados/departamentos', { nombre: nuevoDept.trim() });
             setNuevoDept('');
             cargarEstructura();
+            toast('success', 'Departamento creado correctamente.');
         } catch (err: any) {
             console.error("Error al crear departamento:", err);
-            alert("No se pudo crear el departamento.");
+            toast('error', 'No se pudo crear el departamento.');
         }
     };
 
@@ -76,9 +79,10 @@ export default function Estructura() {
             setCargoParentId('');
             setDeptIdSeleccionadoForCargo(null);
             cargarEstructura();
+            toast('success', 'Cargo registrado correctamente.');
         } catch (err) {
             console.error("Error al registrar puesto laboral:", err);
-            alert("No se pudo registrar el nuevo cargo.");
+            toast('error', 'No se pudo registrar el nuevo cargo.');
         }
     };
 
@@ -87,9 +91,10 @@ export default function Estructura() {
             try {
                 await api.delete(`/empleados/departamentos/${id}`);
                 cargarEstructura();
+                toast('success', 'Departamento eliminado correctamente.');
             } catch (err) {
                 console.error("Error al eliminar:", err);
-                alert("No se pudo eliminar el departamento. Verifica restricciones.");
+                toast('error', 'No se pudo eliminar el departamento. Verifica restricciones.');
             }
         }
     };
