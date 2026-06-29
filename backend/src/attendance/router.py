@@ -5,9 +5,12 @@ from typing import List, Optional
 from src.database import get_db
 from src.core.models import Usuario
 from src.core.dependencies import verificar_rol
+from src.core.services import registrar_auditoria          # ← NUEVO
 from src.attendance.models import Inasistencia, TIPOS_QUE_DESCUENTAN
 from src.attendance.schemas import InasistenciaCreate, InasistenciaResponse
 from src.hr.models import Empleado
+from src.attendance.zkteco_sync import sincronizar_zkteco
+from src.core.dependencies import obtener_usuario_actual
 
 router = APIRouter()
 
@@ -41,6 +44,21 @@ def registrar_inasistencia(
     db.add(inasistencia)
     db.commit()
     db.refresh(inasistencia)
+
+    # RF-16: registrar en auditoría
+    registrar_auditoria(
+        db,
+        usuario_actual.usuario_id,
+        "REGISTRAR_INASISTENCIA",
+        "Asistencia",
+        {
+            "empleado_id": datos.empleado_id,
+            "fecha": str(datos.fecha),
+            "tipo": datos.tipo,
+            "horas_ausentes": float(datos.horas_ausentes),
+        },
+    )
+
     return _enriquecer(inasistencia)
 
 
@@ -49,7 +67,7 @@ def listar_inasistencias(
     empleado_id: int,
     periodo: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente", "Empleado"])),  # ← Empleado puede ver las suyas
 ):
     query = db.query(Inasistencia).filter(
         Inasistencia.empleado_id == empleado_id,
@@ -73,5 +91,37 @@ def eliminar_inasistencia(
     ).first()
     if not inasistencia:
         raise HTTPException(status_code=404, detail="Inasistencia no encontrada")
+
+    # RF-16: registrar en auditoría antes de borrar
+    registrar_auditoria(
+        db,
+        usuario_actual.usuario_id,
+        "ELIMINAR_INASISTENCIA",
+        "Asistencia",
+        {"inasistencia_id": inasistencia_id},
+    )
+
     db.delete(inasistencia)
     db.commit()
+
+@router.post("/sync-zkteco")
+def sync_zkteco(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    """
+    RF-07: Conecta con el biométrico ZKTeco y extrae las marcaciones del día.
+    Requiere que ZKTECO_IP esté configurada en el .env
+    """
+    try:
+        resultado = sincronizar_zkteco(db, usuario_actual.empresa_id)
+        registrar_auditoria(
+            db,
+            usuario_actual.usuario_id,
+            "SYNC_ZKTECO",
+            "Asistencia",
+            resultado,
+        )
+        return resultado
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
