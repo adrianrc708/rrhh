@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
-import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Progress, tableStyles, inputStyle, Field, downloadCSV } from '../components/ui';
+import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Progress, tableStyles, inputStyle, Field, downloadCSV, useToast } from '../components/ui';
 
 const TIPOS = ['Injustificada', 'Justificada', 'Permiso_sin_goce', 'Permiso_con_goce', 'Licencia'];
 const TIPO_TONE: Record<string, any> = {
@@ -10,6 +10,7 @@ const TIPO_TONE: Record<string, any> = {
 };
 
 function ModalInasistencia({ empleados, onClose, onSaved }: { empleados: any[]; onClose: () => void; onSaved: () => void }) {
+    const toast = useToast();
     const [empleadoId, setEmpleadoId] = useState('');
     const [fecha, setFecha] = useState('');
     const [tipo, setTipo] = useState('Injustificada');
@@ -19,7 +20,7 @@ function ModalInasistencia({ empleados, onClose, onSaved }: { empleados: any[]; 
 
     const guardar = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!empleadoId || !fecha) { alert('Selecciona colaborador y fecha.'); return; }
+        if (!empleadoId || !fecha) { toast('warning', 'Selecciona colaborador y fecha.'); return; }
         try {
             setGuardando(true);
             await api.post('/asistencia/', {
@@ -29,7 +30,7 @@ function ModalInasistencia({ empleados, onClose, onSaved }: { empleados: any[]; 
             onSaved(); onClose();
         } catch (err) {
             console.error('Error al registrar inasistencia:', err);
-            alert('No se pudo registrar la inasistencia.');
+            toast('error', 'No se pudo registrar la inasistencia.');
         } finally { setGuardando(false); }
     };
 
@@ -72,6 +73,7 @@ function ModalInasistencia({ empleados, onClose, onSaved }: { empleados: any[]; 
 }
 
 export default function Asistencia() {
+    const toast = useToast();
     const [tab, setTab] = useState('Registro de Inasistencias');
     const [empleados, setEmpleados] = useState<any[]>([]);
     const [empleadoSel, setEmpleadoSel] = useState('');
@@ -138,8 +140,8 @@ export default function Asistencia() {
 
     const eliminar = async (id: number) => {
         if (!window.confirm('¿Eliminar este registro de inasistencia?')) return;
-        try { await api.delete(`/asistencia/${id}`); refrescar(); }
-        catch (e) { console.error(e); alert('No se pudo eliminar.'); }
+        try { await api.delete(`/asistencia/${id}`); refrescar(); toast('success', 'Registro eliminado correctamente.'); }
+        catch (e) { console.error(e); toast('error', 'No se pudo eliminar el registro.'); }
     };
 
     const exportar = () => {

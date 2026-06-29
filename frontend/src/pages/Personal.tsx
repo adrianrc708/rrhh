@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors } from '../theme';
-import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downloadCSV } from '../components/ui';
+import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downloadCSV, useToast } from '../components/ui';
 import FormularioEmpleado from '../components/FormularioEmpleado';
 import Estructura from '../components/Estructura';
 import Contratos from '../components/Contratos';
 
 function Directorio() {
+    const toast = useToast();
     const [empleados, setEmpleados] = useState<any[]>([]);
     const [cargando, setCargando] = useState(true);
     const [modalAbierto, setModalAbierto] = useState(false);
@@ -34,7 +35,7 @@ function Directorio() {
             cargar();
         } catch (err) {
             console.error('Error al dar de baja:', err);
-            alert('No se pudo procesar la baja del colaborador.');
+            toast('error', 'No se pudo procesar la baja del colaborador.');
         }
     };
 
@@ -42,9 +43,10 @@ function Directorio() {
         try {
             await api.patch(`/empleados/${id}`, { estado: 'Activo' });
             cargar();
+            toast('success', 'Colaborador reactivado correctamente.');
         } catch (err) {
             console.error('Error al reactivar:', err);
-            alert('No se pudo reactivar al colaborador.');
+            toast('error', 'No se pudo reactivar al colaborador.');
         }
     };
 
@@ -118,16 +120,150 @@ function Directorio() {
     );
 }
 
+const ROL_TONE: Record<string, any> = { Admin: 'purple', RRHH: 'blue', Gerente: 'amber', Empleado: 'gray' };
+
+function ModalNuevoUsuario({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+    const toast = useToast();
+    const [nombre, setNombre] = useState('');
+    const [correo, setCorreo] = useState('');
+    const [password, setPassword] = useState('');
+    const [rol, setRol] = useState('Empleado');
+    const [guardando, setGuardando] = useState(false);
+
+    const guardar = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!nombre || !correo || !password) { toast('warning', 'Completa todos los campos.'); return; }
+        try {
+            setGuardando(true);
+            await api.post('/core/usuarios', { nombre, correo, password, rol });
+            toast('success', `Usuario "${nombre}" creado. Ya puede ser asignado como colaborador.`);
+            onSaved(); onClose();
+        } catch (err: any) {
+            toast('error', err?.response?.data?.detail || 'No se pudo crear el usuario.');
+        } finally { setGuardando(false); }
+    };
+
+    const inputStyle: React.CSSProperties = {
+        padding: '10px 12px', borderRadius: '8px', border: `1px solid ${colors.border}`,
+        fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none',
+    };
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,19,40,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ background: '#fff', borderRadius: '16px', padding: 28, width: 440, boxShadow: '0 12px 32px rgba(16,24,40,0.18)' }}>
+                <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: colors.textStrong }}>Nuevo Usuario del Sistema</h3>
+                <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Nombre completo</label>
+                        <input value={nombre} onChange={e => setNombre(e.target.value)} style={inputStyle} placeholder="Ej. Monica Sanchez" required />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Correo electrónico</label>
+                        <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} style={inputStyle} placeholder="monica@empresa.com" required />
+                    </div>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Contraseña inicial</label>
+                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} placeholder="Mínimo 6 caracteres" required />
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Rol</label>
+                            <select value={rol} onChange={e => setRol(e.target.value)} style={inputStyle}>
+                                <option value="Empleado">Empleado</option>
+                                <option value="RRHH">RRHH</option>
+                                <option value="Gerente">Gerente</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: colors.textMuted, background: colors.blueSoft, padding: '8px 12px', borderRadius: 8 }}>
+                        Después de crear el usuario, ve a <strong>Directorio → Nuevo Colaborador</strong> para asociarlo como empleado.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+                        <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
+                        <Btn type="submit" variant="orange" disabled={guardando}>{guardando ? 'Creando…' : 'Crear Usuario'}</Btn>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function Usuarios() {
+    const toast = useToast();
+    const [usuarios, setUsuarios] = useState<any[]>([]);
+    const [cargando, setCargando] = useState(true);
+    const [modal, setModal] = useState(false);
+    const [sinPermiso, setSinPermiso] = useState(false);
+
+    const cargar = async () => {
+        try {
+            setCargando(true);
+            const res = await api.get('/core/usuarios');
+            setUsuarios(Array.isArray(res.data) ? res.data : []);
+        } catch (err: any) {
+            if (err?.response?.status === 403) setSinPermiso(true);
+            else toast('error', 'No se pudo cargar la lista de usuarios.');
+        } finally { setCargando(false); }
+    };
+
+    useEffect(() => { cargar(); }, []);
+
+    if (sinPermiso) return (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: colors.textMuted }}>
+            <p style={{ fontSize: 15 }}>Solo los administradores pueden gestionar cuentas de usuario.</p>
+        </div>
+    );
+
+    return (
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                    <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: colors.textStrong }}>Cuentas de Acceso al Sistema</h3>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: colors.textMuted }}>Usuarios con credenciales de login en la plataforma Omnia.</p>
+                </div>
+                <Btn icon="plus" variant="orange" onClick={() => setModal(true)}>Nuevo Usuario</Btn>
+            </div>
+
+            {cargando ? <Loading /> : usuarios.length === 0 ? <Empty text="No hay usuarios registrados." /> : (
+                <table style={tableStyles.table}>
+                    <thead>
+                        <tr>
+                            <th style={tableStyles.th}>Nombre</th>
+                            <th style={tableStyles.th}>Correo</th>
+                            <th style={tableStyles.th}>Rol</th>
+                            <th style={tableStyles.th}>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {usuarios.map((u: any) => (
+                            <tr key={u.usuario_id}>
+                                <td style={tableStyles.td}><strong>{u.nombre}</strong></td>
+                                <td style={{ ...tableStyles.td, color: colors.textMuted }}>{u.correo}</td>
+                                <td style={tableStyles.td}><Badge tone={ROL_TONE[u.rol] || 'gray'}>{u.rol}</Badge></td>
+                                <td style={tableStyles.td}><Badge tone={u.estado === 'Activo' ? 'green' : 'red'}>{u.estado}</Badge></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+
+            {modal && <ModalNuevoUsuario onClose={() => setModal(false)} onSaved={cargar} />}
+        </div>
+    );
+}
+
 export default function Personal() {
     const [tab, setTab] = useState('Directorio');
     return (
         <div>
             <PageHeader title="Gestión de Personal" subtitle="Administración centralizada de colaboradores y estructura organizativa" />
-            <Tabs tabs={['Directorio', 'Organigrama', 'Contratos']} active={tab} onChange={setTab} />
+            <Tabs tabs={['Directorio', 'Organigrama', 'Contratos', 'Usuarios']} active={tab} onChange={setTab} />
             <Card>
                 {tab === 'Directorio' && <Directorio />}
                 {tab === 'Organigrama' && <Estructura />}
                 {tab === 'Contratos' && <Contratos />}
+                {tab === 'Usuarios' && <Usuarios />}
             </Card>
         </div>
     );

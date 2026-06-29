@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { useToast } from './ui';
 
 export default function Contratos() {
+    const toast = useToast();
     const [empleados, setEmpleados] = useState([]);
     const [contratos, setContratos] = useState([]);
     const [cargando, setCargando] = useState(true);
@@ -36,7 +38,7 @@ export default function Contratos() {
     const handleCrearContrato = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!empleadoId || !fechaInicio) {
-            alert("Por favor, rellene los campos obligatorios.");
+            toast('warning', 'Por favor, rellene los campos obligatorios.');
             return;
         }
 
@@ -50,15 +52,14 @@ export default function Contratos() {
                 fecha_fin: fechaFin || null
             });
 
-            // Resetear formulario y recargar
             setEmpleadoId('');
             setFechaInicio('');
             setFechaFin('');
             cargarDatosContratos();
-            alert("Contrato laboral emitido exitosamente.");
+            toast('success', 'Contrato laboral emitido exitosamente.');
         } catch (err) {
             console.error("Error al emitir contrato:", err);
-            alert("No se pudo registrar el contrato laboral.");
+            toast('error', 'No se pudo registrar el contrato laboral.');
         }
     };
 

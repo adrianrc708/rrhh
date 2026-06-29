@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { useToast } from './ui';
 
 interface FormularioProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface FormularioProps {
 }
 
 export default function FormularioEmpleado({ isOpen, onClose, onSave, empleadoAEditar }: FormularioProps) {
+    const toast = useToast();
     const [nombre, setNombre] = useState('');
     const [usuarioId, setUsuarioId] = useState('');
     const [departamentoId, setDepartamentoId] = useState('');
@@ -98,10 +100,11 @@ export default function FormularioEmpleado({ isOpen, onClose, onSave, empleadoAE
             } else {
                 await api.post('/empleados/', payload);
             }
+            toast('success', empleadoAEditar ? 'Datos del colaborador actualizados.' : 'Colaborador registrado exitosamente.');
             onSave();
             onClose();
         } catch (err: any) {
-            alert("Error operacional: No se pudo registrar la información. Revisa la integridad del backend.");
+            toast('error', 'No se pudo registrar la información. Revisa la integridad del backend.');
         }
     };
 

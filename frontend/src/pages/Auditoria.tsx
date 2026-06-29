@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors, radius } from '../theme';
 import Icon from '../components/Icons';
-import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Modal, tableStyles, downloadCSV } from '../components/ui';
+import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Modal, tableStyles, downloadCSV, useToast } from '../components/ui';
 
 const money = (n: any) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ESTADO_TONE: Record<string, any> = { Borrador: 'gray', Revision: 'amber', Aprobado: 'blue', Pagado: 'green' };
@@ -11,6 +11,7 @@ const ACCION_LABEL: Record<string, string> = {
 };
 
 export default function Auditoria() {
+    const toast = useToast();
     const [tab, setTab] = useState('Registro de Auditoría');
     const [eventos, setEventos] = useState<any[]>([]);
     const [nominas, setNominas] = useState<any[]>([]);
@@ -36,10 +37,10 @@ export default function Auditoria() {
         try {
             setGenerando(true);
             const res = await api.post('/core/notificaciones/verificar-contratos');
-            alert(`Verificación completada. Notificaciones generadas: ${res.data.notificaciones_creadas ?? 0}`);
+            toast('success', `Verificación completada. Notificaciones generadas: ${res.data.notificaciones_creadas ?? 0}`);
             cargar(); setTab('Notificaciones');
         } catch (err: any) {
-            alert(err?.response?.data?.detail || 'No se pudo ejecutar la verificación.');
+            toast('error', err?.response?.data?.detail || 'No se pudo ejecutar la verificación.');
         } finally { setGenerando(false); }
     };
 
@@ -52,7 +53,7 @@ export default function Auditoria() {
         try {
             setDescargandoId(nomina.id);
             const boletas = await fetchBoletas(nomina.id);
-            if (boletas.length === 0) { alert('Esta nómina aún no tiene boletas. Consolídala primero en el módulo de Nómina.'); return; }
+            if (boletas.length === 0) { toast('warning', 'Esta nómina aún no tiene boletas. Consolídala primero en el módulo de Nómina.'); return; }
             const rows: (string | number)[][] = [
                 ['Reporte de Planilla', `Periodo ${nomina.periodo}`, `Estado: ${nomina.estado}`],
                 [],
@@ -66,7 +67,7 @@ export default function Auditoria() {
             ];
             downloadCSV(`planilla_${nomina.periodo}.csv`, rows);
         } catch (err) {
-            console.error(err); alert('No se pudo generar el reporte.');
+            console.error(err); toast('error', 'No se pudo generar el reporte.');
         } finally { setDescargandoId(null); }
     };
 
@@ -74,7 +75,7 @@ export default function Auditoria() {
         try {
             const boletas = await fetchBoletas(nomina.id);
             setDetalle({ nomina, boletas });
-        } catch (err) { console.error(err); alert('No se pudieron cargar los detalles.'); }
+        } catch (err) { console.error(err); toast('error', 'No se pudieron cargar los detalles.'); }
     };
 
     const exportarEventos = () => {

@@ -1,6 +1,66 @@
-import React from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
 import { colors, radius, shadow, font } from '../theme';
 import Icon from './Icons';
+
+// ───────────────────────── Toast ─────────────────────────
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+interface ToastItem { id: number; type: ToastType; message: string; }
+
+const TOAST_STYLES: Record<ToastType, { border: string; icon: string; iconColor: string; bg: string }> = {
+    success: { border: colors.green,   icon: 'check',   iconColor: colors.green,   bg: colors.greenSoft },
+    error:   { border: colors.redText, icon: 'x',       iconColor: colors.redText, bg: colors.redSoft   },
+    warning: { border: colors.orange,  icon: 'alert',   iconColor: colors.orange,  bg: colors.orangeSoft },
+    info:    { border: colors.indigo,  icon: 'info',    iconColor: colors.indigo,  bg: colors.blueSoft  },
+};
+
+const ToastCtx = createContext<(type: ToastType, msg: string) => void>(() => {});
+
+export function useToast() {
+    return useContext(ToastCtx);
+}
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+    const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+    const add = useCallback((type: ToastType, message: string) => {
+        const id = Date.now() + Math.random();
+        setToasts(prev => [...prev, { id, type, message }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
+    }, []);
+
+    const remove = (id: number) => setToasts(prev => prev.filter(t => t.id !== id));
+
+    return (
+        <ToastCtx.Provider value={add}>
+            {children}
+            <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 10, width: 340 }}>
+                {toasts.map(t => {
+                    const s = TOAST_STYLES[t.type];
+                    return (
+                        <div key={t.id} style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 12,
+                            background: '#fff', borderRadius: radius.md,
+                            boxShadow: shadow.pop, padding: '14px 16px',
+                            borderLeft: `4px solid ${s.border}`,
+                            animation: 'toast-in .22s ease',
+                            fontFamily: font,
+                        }}>
+                            <div style={{ width: 32, height: 32, borderRadius: radius.sm, background: s.bg, color: s.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Icon name={s.icon} size={16} />
+                            </div>
+                            <p style={{ margin: 0, fontSize: 13.5, color: colors.textBody, lineHeight: 1.45, flex: 1, paddingTop: 6 }}>{t.message}</p>
+                            <button onClick={() => remove(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textFaint, padding: 4, flexShrink: 0 }}>
+                                <Icon name="x" size={14} />
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+            <style>{`@keyframes toast-in { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }`}</style>
+        </ToastCtx.Provider>
+    );
+}
 
 // ───────────────────────── Card ─────────────────────────
 export function Card({ children, style, pad = 24 }: { children: React.ReactNode; style?: React.CSSProperties; pad?: number }) {
