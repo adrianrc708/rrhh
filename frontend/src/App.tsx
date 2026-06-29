@@ -8,6 +8,7 @@ import Nomina from './pages/Nomina';
 import Auditoria from './pages/Auditoria';
 import Landing from './pages/Landing';
 import IntroAnimation from './components/IntroAnimation';
+import Admin from './pages/Admin';
 import { ToastProvider } from './components/ui';
 
 type AppStage = 'landing' | 'intro' | 'login' | 'app';
@@ -70,6 +71,7 @@ export default function App() {
                 {section === 'asistencia' && <Asistencia />}
                 {section === 'nomina' && <Nomina />}
                 {section === 'auditoria' && <Auditoria />}
+                {section === 'admin' && <Admin />}
             </Layout>
         </ToastProvider>
     );

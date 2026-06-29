@@ -293,7 +293,7 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
                         padding: '6px 4px', textDecoration: 'underline', textUnderlineOffset: 3,
                     }}>Iniciar sesión</button>
                     <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,0.12)', margin: '0 6px' }} />
-                    <Btn primary onClick={onEnter}>Empezar gratis</Btn>
+                    <Btn primary onClick={onEnter}>Registrar empresa</Btn>
                 </div>
             </nav>
 
@@ -329,11 +329,18 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
                     </p>
                     <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
                         <Btn primary big onClick={onEnter}>
-                            <Ico d={ICONS.arrow} size={16} /> Empezar gratis
+                            <Ico d={ICONS.arrow} size={16} /> Registrar empresa
                         </Btn>
                         <Btn big><a href="#precios" style={{ color: '#fff', textDecoration: 'none' }}>Ver planes y precios</a></Btn>
                     </div>
                     <p style={{ margin: '22px 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.03em' }}>Sin tarjeta de crédito · Implementación en 24h · Soporte en español</p>
+                    
+                    {/* Video de entrada */}
+                    <div style={{ marginTop: 60, borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
+                        <video autoPlay loop muted playsInline style={{ width: '100%', display: 'block' }}>
+                            <source src="/omnia-entrada.mp4" type="video/mp4" />
+                        </video>
+                    </div>
                 </div>
             </section>
 

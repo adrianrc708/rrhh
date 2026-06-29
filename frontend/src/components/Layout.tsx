@@ -3,14 +3,15 @@ import { colors, radius, font } from '../theme';
 import Icon from './Icons';
 import { OmniaLogo } from './OmniaLogo';
 
-export type SectionKey = 'dashboard' | 'personal' | 'asistencia' | 'nomina' | 'auditoria';
+export type SectionKey = 'dashboard' | 'personal' | 'asistencia' | 'nomina' | 'auditoria' | 'admin';
 
-const NAV: { key: SectionKey; label: string; sub: string; icon: string }[] = [
+const NAV: { key: SectionKey; label: string; sub: string; icon: string; adminOnly?: boolean }[] = [
     { key: 'dashboard', label: 'Dashboard', sub: 'Analítica predictiva de IA', icon: 'dashboard' },
     { key: 'personal', label: 'Personal', sub: 'Directorio y estructura', icon: 'users' },
     { key: 'asistencia', label: 'Asistencia', sub: 'Gestión de registros biométricos', icon: 'clock' },
     { key: 'nomina', label: 'Nómina', sub: 'Cálculos automatizados', icon: 'dollar' },
     { key: 'auditoria', label: 'Auditoría', sub: 'Reportes de cumplimiento', icon: 'shield' },
+    { key: 'admin', label: 'Super Admin', sub: 'Gestión global', icon: 'shield', adminOnly: true },
 ];
 
 function NavItem({ item, active, onClick }: { item: typeof NAV[number]; active: boolean; onClick: () => void }) {
@@ -62,8 +63,8 @@ export default function Layout({
                         <p style={{ margin: '6px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Gestión centralizada SaaS</p>
                     </div>
                     <nav style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {NAV.map((item) => (
-                            <NavItem key={item.key} item={item} active={active === item.key} onClick={() => onNavigate(item.key)} />
+                        {NAV.filter(i => !i.adminOnly || user.rol === 'SuperAdmin').map((item) => (
+                            <NavItem key={item.key} item={item as any} active={active === item.key} onClick={() => onNavigate(item.key)} />
                         ))}
                     </nav>
                 </div>
