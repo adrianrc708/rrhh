@@ -10,6 +10,7 @@ class Empresa(Base):
     razon_social = Column(String(150), nullable=False)
     ruc = Column(String(20), unique=True, nullable=False)
     plan_suscripcion = Column(String(50), default="Premium")
+    estado = Column(String(20), default="Activa")
     fecha_registro = Column(TIMESTAMP, server_default=func.now())
 
 

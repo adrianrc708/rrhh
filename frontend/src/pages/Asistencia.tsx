@@ -3,6 +3,9 @@ import api from '../services/api';
 import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
 import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Progress, tableStyles, inputStyle, Field, Select, downloadCSV, useToast } from '../components/ui';
+import TurnosTab from '../components/TurnosTab';
+import PermisosTab from '../components/PermisosTab';
+import AIPanelTab from '../components/AIPanelTab';
 
 const TIPOS = ['Injustificada', 'Justificada', 'Permiso_sin_goce', 'Permiso_con_goce', 'Licencia'];
 const TIPO_TONE: Record<string, any> = {
@@ -82,6 +85,7 @@ export default function Asistencia() {
     const [modal, setModal] = useState(false);
     const [analitica, setAnalitica] = useState<any | null>(null);
     const [analiticaLoading, setAnaliticaLoading] = useState(false);
+    const [chatSessions, setChatSessions] = useState<Record<string, {role: string, content: string}[]>>({});
 
     useEffect(() => {
         (async () => {
@@ -104,7 +108,9 @@ export default function Asistencia() {
         } finally { setCargando(false); }
     };
 
-    useEffect(() => { cargarInasistencias(empleadoSel); }, [empleadoSel]);
+    useEffect(() => { 
+        cargarInasistencias(empleadoSel); 
+    }, [empleadoSel]);
 
     // Analítica: agrega las inasistencias de todos los colaboradores
     const cargarAnalitica = async () => {
@@ -144,6 +150,18 @@ export default function Asistencia() {
         catch (e) { console.error(e); toast('error', 'No se pudo eliminar el registro.'); }
     };
 
+    const syncZKTeco = async () => {
+        try {
+            toast('info', 'Sincronizando con ZKTeco...');
+            await api.post('/asistencia/sync-zkteco');
+            toast('success', 'Sincronización exitosa.');
+            refrescar();
+        } catch (e) {
+            console.error(e);
+            toast('error', 'Error al sincronizar con ZKTeco.');
+        }
+    };
+
     const exportar = () => {
         if (!inasistencias.length) return;
         const nombre = empleados.find((e) => String(e.empleado_id) === empleadoSel)?.nombre || empleadoSel;
@@ -159,7 +177,12 @@ export default function Asistencia() {
             <PageHeader
                 title="Gestión de Asistencia"
                 subtitle="Registro de inasistencias y permisos que alimentan los descuentos de nómina"
-                action={<Btn icon="plus" onClick={() => setModal(true)}>Registrar Inasistencia</Btn>}
+                action={
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <Btn icon="refresh" variant="outline" onClick={syncZKTeco}>Sincronizar ZKTeco</Btn>
+                        <Btn icon="plus" onClick={() => setModal(true)}>Registrar Inasistencia</Btn>
+                    </div>
+                }
             />
 
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 22 }}>
@@ -169,7 +192,7 @@ export default function Asistencia() {
                 <KpiCard icon="check" label="Sin Descuento" value={empleadoSel ? String(inasistencias.filter((i) => !i.descuenta_sueldo).length) : '—'} sub="Justificadas / con goce" badge="OK" badgeTone="green" />
             </div>
 
-            <Tabs tabs={['Registro de Inasistencias', 'Analítica de Inasistencias']} active={tab} onChange={setTab} />
+            <Tabs tabs={['Registro de Inasistencias', 'Analítica de Inasistencias', 'Gestión de Turnos', 'Permisos y Justificaciones', 'Panel de IA']} active={tab} onChange={setTab} />
 
             {tab === 'Registro de Inasistencias' && (
                 <Card>
@@ -277,6 +300,14 @@ export default function Asistencia() {
                     </>
                 )
             )}
+
+            {tab === 'Gestión de Turnos' && <TurnosTab empleados={empleados} />}
+            {tab === 'Permisos y Justificaciones' && <PermisosTab empleados={empleados} inasistencias={inasistencias} refrescar={refrescar} />}
+            {tab === 'Panel de IA' && <AIPanelTab 
+                empleadoId={empleadoSel} 
+                messages={chatSessions[empleadoSel || 'global'] || []} 
+                setMessages={(msgs) => setChatSessions(prev => ({ ...prev, [empleadoSel || 'global']: msgs }))} 
+            />}
 
             {modal && <ModalInasistencia empleados={empleados} onClose={() => setModal(false)} onSaved={refrescar} />}
         </div>

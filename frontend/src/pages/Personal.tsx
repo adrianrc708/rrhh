@@ -255,9 +255,31 @@ function Usuarios() {
 
 export default function Personal() {
     const [tab, setTab] = useState('Directorio');
+    const [superAdminCount, setSuperAdminCount] = useState<number | null>(null);
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : {};
+
+    useEffect(() => {
+        if (user.rol === 'SuperAdmin') {
+            api.get('/admin/stats').then(res => {
+                if (res.data && typeof res.data.total_superadmins === 'number') {
+                    setSuperAdminCount(res.data.total_superadmins);
+                }
+            }).catch(console.error);
+        }
+    }, [user.rol]);
+
     return (
         <div>
-            <PageHeader title="Gestión de Personal" subtitle="Administración centralizada de colaboradores y estructura organizativa" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <PageHeader title="Gestión de Personal" subtitle="Administración centralizada de colaboradores y estructura organizativa" />
+                {superAdminCount !== null && (
+                    <div style={{ background: colors.navy900, color: '#fff', padding: '10px 16px', borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: colors.orange }} />
+                        Super Admins Globales: <strong>{superAdminCount}</strong>
+                    </div>
+                )}
+            </div>
             <Tabs tabs={['Directorio', 'Organigrama', 'Contratos', 'Usuarios']} active={tab} onChange={setTab} />
             <Card>
                 {tab === 'Directorio' && <Directorio />}

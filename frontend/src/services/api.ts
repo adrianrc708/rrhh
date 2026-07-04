@@ -11,6 +11,13 @@ api.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Inyectar Tenant ID si existe (usado por SuperAdmin para Modo Monitor)
+    const tenantId = localStorage.getItem('monitor_empresa_id');
+    if (tenantId) {
+        config.headers['X-Tenant-ID'] = tenantId;
+    }
+    
     return config;
 });
 

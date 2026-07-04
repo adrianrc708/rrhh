@@ -1,6 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import os
+from openai import OpenAI
+import google.generativeai as genai
+
+class AIChatMessage(BaseModel):
+    role: str
+    content: str
+
+class AIInsightsRequest(BaseModel):
+    messages: List[AIChatMessage] = []
+    empleado_id: Optional[int] = None
 
 from src.database import get_db
 from src.core.models import Usuario
@@ -125,3 +137,104 @@ def sync_zkteco(
         return resultado
     except (ValueError, RuntimeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/ai-insights")
+def ai_insights(
+    request: AIInsightsRequest,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
+):
+    """
+    RF-10: Genera insights de IA sobre inasistencias con soporte conversacional.
+    """
+    query = db.query(Inasistencia).filter(
+        Inasistencia.empresa_id == usuario_actual.empresa_id
+    )
+    
+    if request.empleado_id:
+        query = query.filter(Inasistencia.empleado_id == request.empleado_id)
+        
+    inasistencias = query.all()
+    
+    if not inasistencias:
+        return {"analysis": "No hay datos suficientes de inasistencias para generar un análisis."}
+        
+    empleados = db.query(Empleado).filter(Empleado.empresa_id == usuario_actual.empresa_id).all()
+    empleados_dict = {e.empleado_id: e.nombre for e in empleados}
+    
+    datos_contexto = []
+    for i in inasistencias:
+        nombre = empleados_dict.get(i.empleado_id, f"ID {i.empleado_id}")
+        datos_contexto.append(f"Empleado: {nombre}, Fecha: {i.fecha}, Tipo: {i.tipo}, Horas: {i.horas_ausentes}")
+    
+    contexto = "\n".join(datos_contexto)
+    
+    system_prompt = f"""
+    Actúa como un analista de recursos humanos experto. Tienes acceso al siguiente registro de inasistencias:
+    {contexto}
+    
+    Si el usuario no hace una pregunta específica, proporciona un análisis estructurado:
+    1. Identificación de patrones o tendencias de ausentismo.
+    2. El impacto general basado en el tipo de inasistencias.
+    3. Recomendaciones accionables para mejorar la asistencia.
+    
+    Responde en Markdown. Sé conciso, profesional y mantén un tono constante.
+    """
+    
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    openai_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    
+    if not gemini_key and not openai_key:
+        return {"analysis": "La API key de IA no está configurada en el backend."}
+        
+    try:
+        if gemini_key:
+            genai.configure(api_key=gemini_key)
+            model = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                system_instruction=system_prompt,
+                generation_config={"temperature": 0.2}
+            )
+            
+            history = []
+            for m in request.messages:
+                history.append({"role": "model" if m.role == "assistant" else "user", "parts": [m.content]})
+                
+            if not history:
+                response = model.generate_content("Genera el análisis general de inasistencias.")
+            else:
+                chat = model.start_chat(history=history[:-1])
+                response = chat.send_message(history[-1]["parts"][0])
+                
+            analysis = response.text
+        else:
+            base_url = "https://api.groq.com/openai/v1" if os.getenv("GROQ_API_KEY") else None
+            model = "llama3-8b-8192" if os.getenv("GROQ_API_KEY") else "gpt-3.5-turbo"
+            client = OpenAI(api_key=openai_key, base_url=base_url)
+            
+            openai_msgs = [{"role": "system", "content": system_prompt}]
+            for m in request.messages:
+                openai_msgs.append({"role": m.role, "content": m.content})
+                
+            if not request.messages:
+                openai_msgs.append({"role": "user", "content": "Genera el análisis general de inasistencias."})
+                
+            response = client.chat.completions.create(
+                model=model,
+                messages=openai_msgs,
+                temperature=0.2
+            )
+            analysis = response.choices[0].message.content
+        
+        registrar_auditoria(
+            db,
+            usuario_actual.usuario_id,
+            "GENERAR_AI_INSIGHTS",
+            "Asistencia",
+            {"registros_analizados": len(inasistencias)},
+        )
+        
+        return {"analysis": analysis}
+    except Exception as e:
+        print(f"Error AI: {e}")
+        return {"analysis": f"Ocurrió un error al generar el análisis: {str(e)}"}

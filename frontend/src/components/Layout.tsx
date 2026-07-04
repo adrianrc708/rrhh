@@ -1,17 +1,18 @@
-import React from 'react';
-import { colors, radius, font } from '../theme';
+import React, { useEffect, useState } from 'react';
+import { colors, radius, font, shadow } from '../theme';
 import Icon from './Icons';
 import { OmniaLogo } from './OmniaLogo';
+import api from '../services/api';
 
 export type SectionKey = 'dashboard' | 'personal' | 'asistencia' | 'nomina' | 'auditoria' | 'admin';
 
 const NAV: { key: SectionKey; label: string; sub: string; icon: string; adminOnly?: boolean }[] = [
+    { key: 'admin', label: 'Super Admin', sub: 'Gestión global', icon: 'shield', adminOnly: true },
     { key: 'dashboard', label: 'Dashboard', sub: 'Analítica predictiva de IA', icon: 'dashboard' },
     { key: 'personal', label: 'Personal', sub: 'Directorio y estructura', icon: 'users' },
     { key: 'asistencia', label: 'Asistencia', sub: 'Gestión de registros biométricos', icon: 'clock' },
     { key: 'nomina', label: 'Nómina', sub: 'Cálculos automatizados', icon: 'dollar' },
     { key: 'auditoria', label: 'Auditoría', sub: 'Reportes de cumplimiento', icon: 'shield' },
-    { key: 'admin', label: 'Super Admin', sub: 'Gestión global', icon: 'shield', adminOnly: true },
 ];
 
 function NavItem({ item, active, onClick }: { item: typeof NAV[number]; active: boolean; onClick: () => void }) {
@@ -41,6 +42,46 @@ function NavItem({ item, active, onClick }: { item: typeof NAV[number]; active: 
     );
 }
 
+function MonitorSelector() {
+    const [empresas, setEmpresas] = useState<any[]>([]);
+    const selected = localStorage.getItem('monitor_empresa_id') || '';
+
+    useEffect(() => {
+        api.get('/admin/empresas').then(res => setEmpresas(res.data)).catch(console.error);
+    }, []);
+
+    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        if (e.target.value) {
+            localStorage.setItem('monitor_empresa_id', e.target.value);
+        } else {
+            localStorage.removeItem('monitor_empresa_id');
+        }
+        window.location.reload();
+    };
+
+    return (
+        <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.05)', borderRadius: radius.md, border: `1px solid ${colors.orangeSoft}` }}>
+            <div style={{ fontSize: 11, color: colors.orange, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="eye" size={14} /> Modo Monitor
+            </div>
+            <select
+                value={selected}
+                onChange={handleChange}
+                style={{
+                    width: '100%', padding: '8px 10px', borderRadius: radius.sm,
+                    background: colors.navy800, color: '#fff', border: '1px solid rgba(255,255,255,0.1)',
+                    fontSize: 13, fontFamily: font, outline: 'none'
+                }}
+            >
+                <option value="">Tu empresa (Default)</option>
+                {empresas.map(e => (
+                    <option key={e.empresa_id} value={e.empresa_id}>{e.razon_social}</option>
+                ))}
+            </select>
+        </div>
+    );
+}
+
 export default function Layout({
     active, onNavigate, user, onLogout, children,
 }: {
@@ -61,9 +102,15 @@ export default function Layout({
                     <div style={{ padding: '16px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                         <OmniaLogo variant="compact" width={150} />
                         <p style={{ margin: '6px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>Gestión centralizada SaaS</p>
+                        
+                        {user.rol === 'SuperAdmin' && <MonitorSelector />}
                     </div>
+                    
                     <nav style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {NAV.filter(i => user.rol === 'SuperAdmin' ? i.adminOnly : !i.adminOnly).map((item) => (
+                        {NAV.filter(i => {
+                            if (user.rol === 'SuperAdmin') return i.key !== 'dashboard';
+                            return !i.adminOnly;
+                        }).map((item) => (
                             <NavItem key={item.key} item={item as any} active={active === item.key} onClick={() => onNavigate(item.key)} />
                         ))}
                     </nav>

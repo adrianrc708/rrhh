@@ -6,8 +6,17 @@ from src.attendance.models import Inasistencia
 from src.core.security import obtener_password_hash
 from datetime import date
 
+from sqlalchemy import text
+
 print("Creando tablas en PostgreSQL...")
 Base.metadata.create_all(bind=engine)
+
+# Asegurar que el campo estado exista en la tabla empresas
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE empresas ADD COLUMN estado VARCHAR(20) DEFAULT 'Activa';"))
+except Exception:
+    pass
 
 db = SessionLocal()
 
@@ -15,13 +24,15 @@ if not db.query(Empresa).first():
     print("Insertando datos de prueba relacionales...")
 
     # 1. Crear Empresa base
-    empresa = Empresa(razon_social="Tech SA", ruc="20123456789", plan_suscripcion="Premium")
+    empresa = Empresa(razon_social="Tech SA", ruc="20123456789", plan_suscripcion="Corporativo")
     db.add(empresa)
     db.commit()
     db.refresh(empresa)
 
     # 2. Crear Usuarios globales (Cuentas de acceso)
     usuarios = [
+        Usuario(empresa_id=empresa.empresa_id, nombre="Emanuel",
+                correo="superadmin@tech.com", password_hash=obtener_password_hash("superadmin123"), rol="SuperAdmin"),
         Usuario(empresa_id=empresa.empresa_id, nombre="Adrian Admin",
                 correo="admin@tech.com", password_hash=obtener_password_hash("admin123"), rol="Admin"),
         Usuario(empresa_id=empresa.empresa_id, nombre="Carmen RRHH",
@@ -59,6 +70,9 @@ if not db.query(Empresa).first():
 
     # 5. Crear perfiles de empleado mapeados y sus contratos históricos para TODOS los usuarios (RF-05 y RF-06)
     for u in usuarios:
+        if u.rol == "SuperAdmin":
+            continue # El SuperAdmin no es un empleado de la empresa
+            
         if u.rol == "Admin":
             d_id = dept_rrhh.departamento_id
             c_id = cargo_analista.cargo_id
@@ -110,11 +124,27 @@ if not db.query(Empresa).first():
 
     print("¡Estructura relacional de Recursos Humanos poblada con éxito!")
     print("Cuentas de prueba listas para usar:")
+    print("  Super Admin: superadmin@tech.com / superadmin123")
     print("  Admin:    admin@tech.com    / admin123")
     print("  RRHH:     rrhh@tech.com     / rrhh123")
     print("  Gerente:  gerente@tech.com  / gerente123")
     print("  Empleado: empleada@tech.com / emp123")
 else:
-    print("Las tablas ya tienen datos. No se insertó nada.")
+    print("Las tablas ya tienen datos. Verificando Super Admin...")
+    empresa = db.query(Empresa).first()
+    if empresa:
+        su_admin = db.query(Usuario).filter_by(correo="superadmin@tech.com").first()
+        if not su_admin:
+            su_admin = Usuario(empresa_id=empresa.empresa_id, nombre="Emanuel", correo="superadmin@tech.com", password_hash=obtener_password_hash("superadmin123"), rol="SuperAdmin")
+            db.add(su_admin)
+            db.commit()
+            print("¡Super Admin inyectado en la base de datos existente!")
+        else:
+            su_admin.rol = "SuperAdmin"
+            su_admin.password_hash = obtener_password_hash("superadmin123")
+            db.commit()
+            print("¡Super Admin actualizado a rol SuperAdmin!")
+    else:
+        print("No se insertó nada extra.")
 
 db.close()

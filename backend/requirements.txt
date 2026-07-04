@@ -10,3 +10,5 @@ python-multipart
 apscheduler
 alembic
 pyzk
+openai
+google-generativeai
