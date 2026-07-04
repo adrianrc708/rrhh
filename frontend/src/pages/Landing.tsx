@@ -349,13 +349,6 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
                         <Btn big><a href="#precios" style={{ color: '#fff', textDecoration: 'none' }}>Ver planes y precios</a></Btn>
                     </div>
                     <p style={{ margin: '22px 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.03em' }}>Sin tarjeta de crédito · Implementación en 24h · Soporte en español</p>
-                    
-                    {/* Video de entrada */}
-                    <div style={{ marginTop: 60, borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
-                        <video autoPlay loop muted playsInline style={{ width: '100%', display: 'block' }}>
-                            <source src="/omnia-entrada.mp4" type="video/mp4" />
-                        </video>
-                    </div>
                 </div>
             </section>
 
