@@ -9,9 +9,12 @@ from src.core.models import Usuario
 from src.core.security import verificar_password, crear_token_acceso, obtener_password_hash
 from src.core.dependencies import obtener_usuario_actual, verificar_rol
 from src.core.schemas import UsuarioCreate, UsuarioResponse, RegistroEmpresaCreate
-from src.core.models import Empresa
+from src.core.models import Empresa, Pago
 
 router = APIRouter()
+
+# Precio por usuario activo / mes según plan (en soles, sin IGV) — debe coincidir con la calculadora de la landing page.
+PRECIOS_PLAN = {"Micro": 12, "Estándar": 10, "Corporativo": 8}
 
 
 @router.post("/login")
@@ -141,15 +144,30 @@ def crear_usuario(
 
 @router.post("/registro", status_code=status.HTTP_201_CREATED)
 def registrar_empresa(datos: RegistroEmpresaCreate, db: Session = Depends(get_db)):
-    """Registro público: crea una nueva empresa y su usuario Admin."""
+    """Registro público: crea una nueva empresa, su usuario Admin y procesa el pago del plan elegido."""
+    if datos.plan not in PRECIOS_PLAN:
+        raise HTTPException(status_code=400, detail=f"Plan inválido. Opciones: {', '.join(PRECIOS_PLAN)}")
+    if datos.num_empleados < 1:
+        raise HTTPException(status_code=400, detail="El número de empleados debe ser al menos 1.")
+    if datos.metodo_pago not in {"Tarjeta", "Yape", "Transferencia"}:
+        raise HTTPException(status_code=400, detail="Método de pago inválido.")
+
     if db.query(Usuario).filter(Usuario.correo == datos.correo).first():
         raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese correo.")
 
     import uuid
+
+    # Simulación de pasarela de pago: la tarjeta de prueba terminada en 0002 siempre es rechazada
+    # (igual que la tarjeta de prueba estándar de Stripe/Niubiz), útil para probar el flujo de error.
+    if datos.metodo_pago == "Tarjeta" and datos.tarjeta_ultimos4 == "0002":
+        raise HTTPException(status_code=402, detail="Tu banco rechazó la transacción. Verifica los datos de tu tarjeta o usa otro método de pago.")
+
+    monto = round(PRECIOS_PLAN[datos.plan] * datos.num_empleados, 2)
+
     empresa = Empresa(
         razon_social=datos.empresa_nombre,
         ruc=f"PEND-{uuid.uuid4().hex[:8].upper()}",
-        plan_suscripcion="Micro",
+        plan_suscripcion=datos.plan,
     )
     db.add(empresa)
     db.flush()
@@ -163,8 +181,22 @@ def registrar_empresa(datos: RegistroEmpresaCreate, db: Session = Depends(get_db
         estado="Activo",
     )
     db.add(admin)
+    db.flush()
+
+    pago = Pago(
+        empresa_id=empresa.empresa_id,
+        plan=datos.plan,
+        num_empleados=datos.num_empleados,
+        monto=monto,
+        metodo_pago=datos.metodo_pago,
+        tarjeta_ultimos4=datos.tarjeta_ultimos4 if datos.metodo_pago == "Tarjeta" else None,
+        referencia=f"OMN-{uuid.uuid4().hex[:10].upper()}",
+        estado="Aprobado",
+    )
+    db.add(pago)
     db.commit()
     db.refresh(admin)
+    db.refresh(pago)
 
     token = crear_token_acceso(
         data={"sub": admin.correo, "empresa_id": admin.empresa_id},
@@ -174,4 +206,11 @@ def registrar_empresa(datos: RegistroEmpresaCreate, db: Session = Depends(get_db
         "access_token": token,
         "token_type": "bearer",
         "usuario": {"nombre": admin.nombre, "correo": admin.correo, "rol": admin.rol},
+        "pago": {
+            "plan": pago.plan,
+            "num_empleados": pago.num_empleados,
+            "monto": float(pago.monto),
+            "referencia": pago.referencia,
+            "estado": pago.estado,
+        },
     }

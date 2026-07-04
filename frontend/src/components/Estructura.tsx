@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
-import { useToast } from './ui';
+import { colors, radius } from '../theme';
+import { Card, Field, Select, Btn, Badge, Loading, useToast, inputStyle } from './ui';
 
 export default function Estructura() {
     const toast = useToast();
@@ -100,57 +101,51 @@ export default function Estructura() {
     };
 
     return (
-        <div style={{ fontFamily: 'sans-serif', marginTop: '10px' }}>
-            <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', color: '#111827' }}>Estructura Organizacional</h3>
-            {/* 🔥 MODIFICADO: Se removió la etiqueta (RF-04) */}
-            <p style={{ color: '#6b7280', fontSize: '14px', margin: '0 0 20px 0' }}>Gestión avanzada de departamentos funcionales y puestos de trabajo con jerarquías de mando.</p>
+        <div>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: colors.textStrong }}>Estructura Organizacional</h3>
+            <p style={{ color: colors.textMuted, fontSize: 13, margin: '0 0 20px' }}>Gestión avanzada de departamentos funcionales y puestos de trabajo con jerarquías de mando.</p>
 
-            {/* Formulario de creación de Área en NARANJA */}
-            <form onSubmit={handleCrearDepartamento} style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+            {/* Formulario de creación de Área */}
+            <form onSubmit={handleCrearDepartamento} style={{ display: 'flex', gap: 10, marginBottom: 26 }}>
                 <input
                     type="text"
                     value={nuevoDept}
                     onChange={(e) => setNuevoDept(e.target.value)}
                     placeholder="Nombre del nuevo departamento (Ej: TI, Marketing)"
-                    style={{ padding: '10px', width: '300px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '14px' }}
+                    style={{ ...inputStyle, width: 320 }}
                     required
                 />
-                {/* 🔥 MODIFICADO: Color cambiado a naranja de la plataforma */}
-                <button type="submit" style={{ padding: '10px 18px', backgroundColor: '#f97316', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                    + Crear Área
-                </button>
+                <Btn type="submit" icon="plus">Crear Área</Btn>
             </form>
 
             {cargando ? (
-                <p style={{ color: '#6b7280' }}>Construyendo jerarquías de la empresa...</p>
+                <Loading text="Construyendo jerarquías de la empresa…" />
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20 }}>
                     {departamentos.map((dept: any) => (
-                        <div key={dept.departamento_id} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                        <Card key={dept.departamento_id} pad={18}>
 
-                            {/* 🔥 MODIFICADO: Línea de acento cambiada al azul marino corporativo */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #1A1C4b', paddingBottom: '8px' }}>
-                                <strong style={{ fontSize: '15px', color: '#1f2937' }}>{dept.nombre} (ID: {dept.departamento_id})</strong>
-                                <button
-                                    onClick={() => handleEliminarDepartamento(dept.departamento_id, dept.nombre)}
-                                    style={{ backgroundColor: '#fee2e2', color: '#991b1b', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', padding: '5px 10px', fontWeight: 'bold' }}
-                                >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `2px solid ${colors.navy900}`, paddingBottom: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <strong style={{ fontSize: 15, color: colors.textStrong }}>{dept.nombre}</strong>
+                                    <Badge tone="gray">ID {dept.departamento_id}</Badge>
+                                </div>
+                                <Btn size="sm" variant="danger" icon="trash" onClick={() => handleEliminarDepartamento(dept.departamento_id, dept.nombre)}>
                                     Eliminar
-                                </button>
+                                </Btn>
                             </div>
 
-                            <div style={{ marginTop: '15px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                    <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', margin: 0 }}>Línea de Mando Interna:</p>
+                            <div style={{ marginTop: 16 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                    <p style={{ fontSize: 12, fontWeight: 700, color: colors.textMuted, margin: 0, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Línea de Mando Interna</p>
 
                                     {deptIdSeleccionadoForCargo !== dept.departamento_id && (
-                                        /* 🔥 MODIFICADO: Enlace "+ Añadir Cargo" ahora es naranja */
                                         <button
                                             onClick={() => {
                                                 setCargoParentId('');
                                                 setDeptIdSeleccionadoForCargo(dept.departamento_id);
                                             }}
-                                            style={{ backgroundColor: 'transparent', color: '#f97316', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', padding: 0 }}
+                                            style={{ background: 'transparent', color: colors.orange, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, padding: 0 }}
                                         >
                                             + Añadir Cargo
                                         </button>
@@ -158,85 +153,76 @@ export default function Estructura() {
                                 </div>
 
                                 {deptIdSeleccionadoForCargo === dept.departamento_id && (
-                                    <form onSubmit={(e) => handleCrearCargo(e, dept.departamento_id)} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px', backgroundColor: '#f9fafb', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                                    <form onSubmit={(e) => handleCrearCargo(e, dept.departamento_id)} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16, backgroundColor: colors.bg, padding: 12, borderRadius: radius.md, border: `1px solid ${colors.border}` }}>
                                         <input
                                             type="text"
                                             placeholder="Nombre del puesto (Ej: Jefe de TI)"
                                             value={nuevoCargoNombre}
                                             onChange={(e) => setNuevoCargoNombre(e.target.value)}
-                                            style={{ padding: '6px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '4px' }}
+                                            style={inputStyle}
                                             required
                                             autoFocus
                                         />
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                            <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#4b5563' }}>Reporta Directamente A:</label>
-                                            <select
-                                                value={cargoParentId}
-                                                onChange={(e) => setCargoParentId(e.target.value)}
-                                                style={{ padding: '6px', fontSize: '12px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff' }}
-                                            >
+                                        <Field label="Reporta directamente a">
+                                            <Select value={cargoParentId} onChange={setCargoParentId}>
                                                 <option value="">-- Ninguno (Puesto de Máxima Autoridad) --</option>
                                                 {dept.cargos.map((c: any) => (
                                                     <option key={c.cargo_id} value={c.cargo_id}>
                                                         {c.nombre}
                                                     </option>
                                                 ))}
-                                            </select>
-                                        </div>
+                                            </Select>
+                                        </Field>
 
-                                        <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                                            <button type="button" onClick={() => setDeptIdSeleccionadoForCargo(null)} style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#9ca3af', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                            <Btn size="sm" variant="outline" type="button" onClick={() => setDeptIdSeleccionadoForCargo(null)}>
                                                 Cancelar
-                                            </button>
-                                            <button type="submit" style={{ padding: '4px 12px', fontSize: '12px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                            </Btn>
+                                            <Btn size="sm" variant="green" type="submit">
                                                 Guardar Puesto
-                                            </button>
+                                            </Btn>
                                         </div>
                                     </form>
                                 )}
 
-                                <ul style={{ paddingLeft: '0', margin: 0, fontSize: '13px', color: '#374151', listStyleType: 'none' }}>
-                                    {dept.cargos && dept.cargos.length > 0 ? (
-                                        dept.cargos.map((cargo: any) => {
+                                {dept.cargos && dept.cargos.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        {dept.cargos.map((cargo: any) => {
                                             const nombreJefe = obtenerNombreCargoPadre(dept.cargos, cargo.parent_id);
 
                                             return (
-                                                <li key={cargo.cargo_id} style={{ marginBottom: '12px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #f3f4f6' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                        <span style={{ fontWeight: 'bold', color: '#1f2937' }}>{cargo.nombre}</span>
-                                                    </div>
+                                                <div key={cargo.cargo_id} style={{ padding: 12, backgroundColor: colors.bg, borderRadius: radius.md, border: `1px solid ${colors.borderSoft}` }}>
+                                                    <span style={{ fontWeight: 700, color: colors.textStrong, fontSize: 13.5 }}>{cargo.nombre}</span>
 
                                                     {nombreJefe && (
-                                                        <div style={{ marginTop: '2px' }}>
-                                                            {/* Cambiado a un tono coral/naranja coherente */}
-                                                            <span style={{ color: '#f97316', fontSize: '11px', fontWeight: '500' }}>
-                                                                🗲 Reporta a: <strong style={{ color: '#b43403' }}>{nombreJefe}</strong>
+                                                        <div style={{ marginTop: 3 }}>
+                                                            <span style={{ color: colors.orangeText, fontSize: 11.5, fontWeight: 600 }}>
+                                                                › Reporta a <strong>{nombreJefe}</strong>
                                                             </span>
                                                         </div>
                                                     )}
 
-                                                    <div style={{ paddingLeft: '5px', marginTop: '6px', fontSize: '12px', color: '#4b5563', borderTop: '1px dashed #e5e7eb', paddingTop: '4px' }}>
+                                                    <div style={{ marginTop: 8, paddingTop: 6, fontSize: 12, color: colors.textMuted, borderTop: `1px dashed ${colors.border}` }}>
                                                         {cargo.colaboradoresAsignados && cargo.colaboradoresAsignados.length > 0 ? (
                                                             cargo.colaboradoresAsignados.map((colab: any) => (
-                                                                /* Cambiado a la paleta navy de la app */
-                                                                <div key={colab.empleado_id} style={{ fontStyle: 'italic', color: '#1A1C4b', fontWeight: '500' }}>
+                                                                <div key={colab.empleado_id} style={{ fontStyle: 'italic', color: colors.navy900, fontWeight: 500 }}>
                                                                     • {colab.nombre || `Empleado ID ${colab.empleado_id}`}
                                                                 </div>
                                                             ))
                                                         ) : (
-                                                            <span style={{ color: '#9ca3af', fontSize: '11px' }}>• (Puesto Vacante)</span>
+                                                            <Badge tone="gray">Puesto vacante</Badge>
                                                         )}
                                                     </div>
-                                                </li>
+                                                </div>
                                             );
-                                        })
-                                    ) : (
-                                        <li style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '12px' }}>Sin puestos registrados aún.</li>
-                                    )}
-                                </ul>
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p style={{ color: colors.textFaint, fontStyle: 'italic', fontSize: 12.5, margin: 0 }}>Sin puestos registrados aún.</p>
+                                )}
                             </div>
-                        </div>
+                        </Card>
                     ))}
                 </div>
             )}

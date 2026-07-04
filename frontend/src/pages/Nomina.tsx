@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
-import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, tableStyles, inputStyle, Field, downloadCSV, useToast } from '../components/ui';
+import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, tableStyles, inputStyle, Field, Select, downloadCSV, useToast } from '../components/ui';
 
 const money = (n: any) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ESTADO_TONE: Record<string, any> = { Borrador: 'gray', Revision: 'amber', Aprobado: 'blue', Pagado: 'green' };
@@ -158,9 +158,9 @@ export default function Nomina() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                                 <Field label="Periodo">
-                                    <select value={selId ?? ''} onChange={(e) => setSelId(Number(e.target.value))} style={{ ...inputStyle, width: 200 }}>
+                                    <Select value={selId ?? ''} onChange={(v) => setSelId(Number(v))} style={{ width: 200 }}>
                                         {nominas.map((n) => <option key={n.id} value={n.id}>{n.periodo}</option>)}
-                                    </select>
+                                    </Select>
                                 </Field>
                                 <div style={{ marginTop: 6 }}>
                                     <p style={{ margin: 0, fontSize: 12, color: colors.textMuted }}>Estado actual</p>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors } from '../theme';
-import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downloadCSV, useToast } from '../components/ui';
+import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downloadCSV, useToast, Select, PasswordField } from '../components/ui';
 import FormularioEmpleado from '../components/FormularioEmpleado';
 import Estructura from '../components/Estructura';
 import Contratos from '../components/Contratos';
@@ -155,25 +155,25 @@ function ModalNuevoUsuario({ onClose, onSaved }: { onClose: () => void; onSaved:
                 <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Nombre completo</label>
-                        <input value={nombre} onChange={e => setNombre(e.target.value)} style={inputStyle} placeholder="Ej. Monica Sanchez" required />
+                        <input value={nombre} onChange={e => setNombre(e.target.value)} style={inputStyle} placeholder="Ej. Monica Sanchez" autoComplete="name" required />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Correo electrónico</label>
-                        <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} style={inputStyle} placeholder="monica@empresa.com" required />
+                        <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} style={inputStyle} placeholder="monica@empresa.com" autoComplete="email" required />
                     </div>
                     <div style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Contraseña inicial</label>
-                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} placeholder="Mínimo 6 caracteres" required />
+                            <PasswordField value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" autoComplete="new-password" required />
                         </div>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <label style={{ fontSize: 13, fontWeight: 600, color: colors.textBody }}>Rol</label>
-                            <select value={rol} onChange={e => setRol(e.target.value)} style={inputStyle}>
+                            <Select value={rol} onChange={setRol}>
                                 <option value="Empleado">Empleado</option>
                                 <option value="RRHH">RRHH</option>
                                 <option value="Gerente">Gerente</option>
                                 <option value="Admin">Admin</option>
-                            </select>
+                            </Select>
                         </div>
                     </div>
                     <p style={{ margin: 0, fontSize: 12, color: colors.textMuted, background: colors.blueSoft, padding: '8px 12px', borderRadius: 8 }}>

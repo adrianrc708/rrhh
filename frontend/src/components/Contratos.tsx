@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
-import { useToast } from './ui';
+import { colors } from '../theme';
+import { Card, Field, Select, Btn, Badge, Loading, Empty, tableStyles, useToast, inputStyle } from './ui';
 
 export default function Contratos() {
     const toast = useToast();
@@ -69,106 +70,99 @@ export default function Contratos() {
     };
 
     return (
-        <div style={{ fontFamily: 'sans-serif', marginTop: '10px' }}>
-            <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', color: '#111827' }}>Gestión de Contratos y Condiciones Laborales</h3>
-            {/* 🔥 MODIFICADO: Se removió la etiqueta (RF-06) */}
-            <p style={{ color: '#6b7280', fontSize: '14px', margin: '0 0 20px 0' }}>Control de vigencias, remuneraciones base y jornadas horarias pactadas.</p>
+        <div>
+            <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: colors.textStrong }}>Gestión de Contratos y Condiciones Laborales</h3>
+            <p style={{ color: colors.textMuted, fontSize: 13, margin: '0 0 20px' }}>Control de vigencias, remuneraciones base y jornadas horarias pactadas.</p>
 
             {cargando ? (
-                <p style={{ color: '#6b7280' }}>Sincronizando historial de contratos...</p>
+                <Loading text="Sincronizando historial de contratos…" />
             ) : (
-                <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
                     {/* Formulario de Emisión */}
-                    <form onSubmit={handleCrearContrato} style={{ width: '320px', backgroundColor: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <strong style={{ fontSize: '14px', color: '#374151', marginBottom: '4px' }}>Generar Nuevo Contrato</strong>
+                    <Card style={{ width: 320, flexShrink: 0 }}>
+                        <form onSubmit={handleCrearContrato} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <strong style={{ fontSize: 14, color: colors.textStrong }}>Generar nuevo contrato</strong>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Seleccionar Colaborador:</label>
-                            <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required>
-                                <option value="">-- Seleccione un empleado --</option>
-                                {empleados.map((e: any) => (
-                                    <option key={e.empleado_id} value={e.empleado_id}>
-                                        {e.nombre || `ID: ${e.empleado_id}`} ({e.estado})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                            <Field label="Seleccionar colaborador">
+                                <Select value={empleadoId} onChange={setEmpleadoId} required>
+                                    <option value="">-- Seleccione un empleado --</option>
+                                    {empleados.map((e: any) => (
+                                        <option key={e.empleado_id} value={e.empleado_id}>
+                                            {e.nombre || `ID: ${e.empleado_id}`} ({e.estado})
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Tipo de Contrato:</label>
-                            <select value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '13px', width: '100%', boxSizing: 'border-box' }}>
-                                <option value="Plazo Fijo (Temporal)">Plazo Fijo (Temporal)</option>
-                                <option value="Indeterminado">Indeterminado</option>
-                                <option value="Part-Time">Part-Time</option>
-                                <option value="Por Locación de Servicios">Por Locación de Servicios</option>
-                            </select>
-                        </div>
+                            <Field label="Tipo de contrato">
+                                <Select value={tipoContrato} onChange={setTipoContrato}>
+                                    <option value="Plazo Fijo (Temporal)">Plazo Fijo (Temporal)</option>
+                                    <option value="Indeterminado">Indeterminado</option>
+                                    <option value="Part-Time">Part-Time</option>
+                                    <option value="Por Locación de Servicios">Por Locación de Servicios</option>
+                                </Select>
+                            </Field>
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Sueldo Base (S/.):</label>
-                                <input type="number" value={sueldoBase} onChange={(e) => setSueldoBase(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required />
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Field label="Sueldo base (S/.)">
+                                        <input type="number" value={sueldoBase} onChange={(e) => setSueldoBase(e.target.value)} style={inputStyle} required />
+                                    </Field>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Field label="Horas al mes">
+                                        <input type="number" value={horasMes} onChange={(e) => setHorasMes(e.target.value)} style={inputStyle} required />
+                                    </Field>
+                                </div>
                             </div>
-                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Horas al Mes:</label>
-                                <input type="number" value={horasMes} onChange={(e) => setHorasMes(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required />
-                            </div>
-                        </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Fecha Inicio:</label>
-                            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} required />
-                        </div>
+                            <Field label="Fecha inicio">
+                                <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} style={inputStyle} required />
+                            </Field>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>Fecha Fin (Opcional):</label>
-                            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px', width: '100%', boxSizing: 'border-box' }} />
-                        </div>
+                            <Field label="Fecha fin (opcional)">
+                                <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} style={inputStyle} />
+                            </Field>
 
-                        {/* 🔥 MODIFICADO: Color cambiado a naranja de la plataforma */}
-                        <button type="submit" style={{ marginTop: '8px', padding: '10px', backgroundColor: '#f97316', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>
-                            + Emitir Contrato
-                        </button>
-                    </form>
+                            <Btn type="submit" icon="plus" style={{ marginTop: 4, width: '100%', justifyContent: 'center' }}>Emitir Contrato</Btn>
+                        </form>
+                    </Card>
 
                     {/* Historial Visual */}
-                    <div style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px' }}>
-                        <strong style={{ fontSize: '14px', color: '#374151', display: 'block', marginBottom: '15px' }}>Registro Histórico de Vigencias</strong>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid #e5e7eb', color: '#4b5563', fontWeight: 'bold' }}>
-                                    <th style={{ padding: '10px 5px' }}>ID</th>
-                                    <th style={{ padding: '10px 5px' }}>Colaborador</th>
-                                    <th style={{ padding: '10px 5px' }}>Régimen</th>
-                                    <th style={{ padding: '10px 5px' }}>Sueldo Base</th>
-                                    <th style={{ padding: '10px 5px' }}>Vigencia</th>
-                                    <th style={{ padding: '10px 5px', textAlign: 'center' }}>Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {contratos.map((con: any) => (
-                                    <tr key={con.contrato_id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{ padding: '12px 5px', fontWeight: 'bold' }}>{con.contrato_id}</td>
-                                        <td style={{ padding: '12px 5px', fontWeight: '600' }}>{obtenerNombreEmpleado(con.empleado_id)}</td>
-                                        <td style={{ padding: '12px 5px', color: '#4b5563' }}>{con.tipo_contrato}</td>
-                                        <td style={{ padding: '12px 5px', color: '#10b981', fontWeight: 'bold' }}>S/. {con.sueldo_base}</td>
-                                        <td style={{ padding: '12px 5px', color: '#6b7280' }}>{con.fecha_inicio} al {con.fecha_fin || 'Indefinido'}</td>
-                                        <td style={{ padding: '12px 5px', textAlign: 'center' }}>
-                                            <span style={{
-                                                padding: '3px 8px',
-                                                backgroundColor: con.estado === 'Vigente' ? '#d1fae5' : '#fee2e2',
-                                                color: con.estado === 'Vigente' ? '#065f46' : '#991b1b',
-                                                borderRadius: '10px', fontSize: '11px', fontWeight: 'bold'
-                                            }}>
-                                                {con.estado}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <Card style={{ flex: 1, minWidth: 320 }}>
+                        <strong style={{ fontSize: 14, color: colors.textStrong, display: 'block', marginBottom: 16 }}>Registro histórico de vigencias</strong>
+                        {contratos.length === 0 ? <Empty text="Aún no se han emitido contratos." /> : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={tableStyles.table}>
+                                    <thead>
+                                        <tr>
+                                            <th style={tableStyles.th}>ID</th>
+                                            <th style={tableStyles.th}>Colaborador</th>
+                                            <th style={tableStyles.th}>Régimen</th>
+                                            <th style={tableStyles.th}>Sueldo base</th>
+                                            <th style={tableStyles.th}>Vigencia</th>
+                                            <th style={{ ...tableStyles.th, textAlign: 'center' }}>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {contratos.map((con: any) => (
+                                            <tr key={con.contrato_id}>
+                                                <td style={{ ...tableStyles.td, fontWeight: 700, color: colors.textStrong }}>{con.contrato_id}</td>
+                                                <td style={{ ...tableStyles.td, fontWeight: 600, color: colors.textStrong }}>{obtenerNombreEmpleado(con.empleado_id)}</td>
+                                                <td style={tableStyles.td}>{con.tipo_contrato}</td>
+                                                <td style={{ ...tableStyles.td, color: colors.green, fontWeight: 700 }}>S/. {con.sueldo_base}</td>
+                                                <td style={{ ...tableStyles.td, color: colors.textMuted }}>{con.fecha_inicio} al {con.fecha_fin || 'Indefinido'}</td>
+                                                <td style={{ ...tableStyles.td, textAlign: 'center' }}>
+                                                    <Badge tone={con.estado === 'Vigente' ? 'green' : 'red'}>{con.estado}</Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </Card>
 
                 </div>
             )}

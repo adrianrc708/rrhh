@@ -164,10 +164,11 @@ function Pillar({ iconKey, title, desc }: { iconKey: keyof typeof ICONS; title: 
 }
 
 // ── Calculadora de Precios ───────────────────────────────────────────────────
+const MAX_COLABORADORES = 9999; // sin límite práctico: cualquier empresa, sin importar el tamaño
 const PLANES = [
-    { nombre: 'Plan Micro',       min: 1,   max: 15,  precio: 12, color: '#6366F1' },
-    { nombre: 'Plan Estándar',    min: 16,  max: 100, precio: 10, color: orange },
-    { nombre: 'Plan Corporativo', min: 101, max: 500, precio: 8,  color: '#16A34A' },
+    { nombre: 'Plan Micro',       min: 1,   max: 15,       precio: 12, color: '#6366F1' },
+    { nombre: 'Plan Estándar',    min: 16,  max: 100,      precio: 10, color: orange },
+    { nombre: 'Plan Corporativo', min: 101, max: Infinity, precio: 8,  color: '#16A34A' },
 ];
 const BUK_MIN = 290; // tarifa mínima referencial competencia
 
@@ -201,16 +202,30 @@ function CalculadoraPrecios({ onEnter }: { onEnter: () => void }) {
                     <div style={{ marginBottom: 40 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
                             <label style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>Número de colaboradores</label>
-                            <span style={{ fontSize: 36, fontWeight: 900, color: plan.color }}>{empleados}</span>
+                            <input
+                                type="number" min={1} max={MAX_COLABORADORES} value={empleados}
+                                onChange={e => {
+                                    const v = Math.round(Number(e.target.value));
+                                    setEmpleados(Number.isFinite(v) && v > 0 ? Math.min(v, MAX_COLABORADORES) : 1);
+                                }}
+                                style={{
+                                    fontSize: 36, fontWeight: 900, color: plan.color, background: 'transparent',
+                                    border: 'none', outline: 'none', textAlign: 'right', width: 110,
+                                    fontFamily: font,
+                                }}
+                            />
                         </div>
                         <input
-                            type="range" min={1} max={200} value={empleados}
+                            type="range" min={1} max={500} value={Math.min(empleados, 500)}
                             onChange={e => setEmpleados(Number(e.target.value))}
                             style={{ width: '100%', accentColor: plan.color, height: 6, cursor: 'pointer' }}
                         />
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
-                            <span>1</span><span>50</span><span>100</span><span>150</span><span>200</span>
+                            <span>1</span><span>100</span><span>200</span><span>300</span><span>400</span><span>500+</span>
                         </div>
+                        <p style={{ margin: '10px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'right' }}>
+                            ¿Más de 500 colaboradores? Escribe el número exacto arriba — no hay límite.
+                        </p>
                     </div>
 
                     {/* Plan activo */}

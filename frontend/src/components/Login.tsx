@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import api from '../services/api';
 import { colors, font } from '../theme';
 import { OmniaLogo } from './OmniaLogo';
+import Icon from './Icons';
+import PasarelaPago, { DatosPago, ResultadoPago } from './PasarelaPago';
 
 interface LoginProps {
     onLogin: (user: { nombre: string; rol: string; correo: string }) => void;
@@ -12,26 +14,47 @@ const orange = '#F97316';
 const navy   = '#1A1C4B';
 
 // ── Input con label ──────────────────────────────────────────────────────────
-function Field({ label, type, value, onChange, placeholder }: {
+function Field({ label, type, value, onChange, placeholder, name, autoComplete }: {
     label: string; type: string; value: string;
-    onChange: (v: string) => void; placeholder?: string;
+    onChange: (v: string) => void; placeholder?: string; name?: string; autoComplete?: string;
 }) {
+    const [verPassword, setVerPassword] = useState(false);
+    const esPassword = type === 'password';
+    const tipoReal = esPassword && verPassword ? 'text' : type;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={{ fontSize: 14, fontWeight: 600, color: colors.textBody }}>{label}</label>
-            <input
-                type={type} value={value} required placeholder={placeholder}
-                onChange={e => onChange(e.target.value)}
-                style={{
-                    padding: '13px 16px', borderRadius: 10,
-                    border: `1.5px solid ${colors.border}`,
-                    fontSize: 15, fontFamily: font, outline: 'none',
-                    color: colors.textBody, background: '#fff',
-                    transition: 'border-color .15s',
-                }}
-                onFocus={e  => (e.target.style.borderColor = orange)}
-                onBlur={e   => (e.target.style.borderColor = colors.border)}
-            />
+            <div style={{ position: 'relative' }}>
+                <input
+                    type={tipoReal} value={value} required placeholder={placeholder}
+                    name={name} autoComplete={autoComplete}
+                    onChange={e => onChange(e.target.value)}
+                    style={{
+                        padding: '13px 16px', paddingRight: esPassword ? 46 : 16, borderRadius: 10,
+                        border: `1.5px solid ${colors.border}`, width: '100%', boxSizing: 'border-box',
+                        fontSize: 15, fontFamily: font, outline: 'none',
+                        color: colors.textBody, background: '#fff',
+                        transition: 'border-color .15s',
+                    }}
+                    onFocus={e  => (e.target.style.borderColor = orange)}
+                    onBlur={e   => (e.target.style.borderColor = colors.border)}
+                />
+                {esPassword && (
+                    <button
+                        type="button" tabIndex={-1}
+                        onClick={() => setVerPassword(v => !v)}
+                        aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        style={{
+                            position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)',
+                            background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                            display: 'flex', color: colors.textFaint,
+                        }}
+                    >
+                        <Icon name={verPassword ? 'eyeOff' : 'eye'} size={19} />
+                    </button>
+                )}
+            </div>
         </div>
     );
 }
@@ -54,6 +77,7 @@ function SubmitBtn({ loading, children }: { loading: boolean; children: React.Re
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Login({ onLogin, onBack }: LoginProps) {
     const [tab, setTab] = useState<'login' | 'registro'>('login');
+    const [regStep, setRegStep] = useState<1 | 2>(1);
 
     // Login state
     const [correo,   setCorreo]   = useState('');
@@ -68,6 +92,8 @@ export default function Login({ onLogin, onBack }: LoginProps) {
 
     const [error,    setError]    = useState('');
     const [loading,  setLoading]  = useState(false);
+
+    const cambiarTab = (t: 'login' | 'registro') => { setTab(t); setError(''); setRegStep(1); };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -87,22 +113,30 @@ export default function Login({ onLogin, onBack }: LoginProps) {
         } finally { setLoading(false); }
     };
 
-    const handleRegistro = async (e: React.FormEvent) => {
+    const avanzarAPago = (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         if (regPass !== regPass2) { setError('Las contraseñas no coinciden.'); return; }
         if (regPass.length < 6)   { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
-        setLoading(true);
+        setRegStep(2);
+    };
+
+    const procesarPago = async (datos: DatosPago): Promise<ResultadoPago> => {
         try {
-            const resp = await api.post('/core/registro', { empresa_nombre: empresa, nombre, correo: regCorreo, password: regPass });
+            const resp = await api.post('/core/registro', {
+                empresa_nombre: empresa, nombre, correo: regCorreo, password: regPass,
+                plan: datos.plan, num_empleados: datos.numEmpleados,
+                metodo_pago: datos.metodoPago, tarjeta_ultimos4: datos.tarjetaUltimos4,
+            });
             localStorage.setItem('token', resp.data.access_token);
             const u = resp.data.usuario;
-            localStorage.setItem('user', JSON.stringify({ nombre: u.nombre, rol: u.rol, correo: u.correo }));
-            onLogin({ nombre: u.nombre, rol: u.rol, correo: u.correo });
+            const usuario = { nombre: u.nombre, rol: u.rol, correo: u.correo };
+            localStorage.setItem('user', JSON.stringify(usuario));
+            return { usuario, pago: resp.data.pago };
         } catch (err: any) {
             const d = err?.response?.data?.detail;
-            setError(typeof d === 'string' ? d : 'No se pudo crear la cuenta. Inténtalo de nuevo.');
-        } finally { setLoading(false); }
+            throw new Error(typeof d === 'string' ? d : 'No se pudo procesar el pago. Inténtalo de nuevo.');
+        }
     };
 
     return (
@@ -117,7 +151,7 @@ export default function Login({ onLogin, onBack }: LoginProps) {
             <div style={{ position: 'absolute', top: '50%', right: '20%', width: 200, height: 200, borderRadius: '50%', background: 'rgba(249,115,22,0.04)', filter: 'blur(60px)', pointerEvents: 'none' }} />
 
             {/* Contenedor centrado */}
-            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: 560, padding: '20px 24px' }}>
+            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: tab === 'registro' && regStep === 2 ? 620 : 560, padding: '20px 24px', transition: 'max-width .2s' }}>
 
                 {/* Logo clickeable */}
                 <div
@@ -143,7 +177,7 @@ export default function Login({ onLogin, onBack }: LoginProps) {
                     {/* Tabs */}
                     <div style={{ display: 'flex', borderBottom: `1px solid ${colors.border}` }}>
                         {(['login', 'registro'] as const).map(t => (
-                            <button key={t} onClick={() => { setTab(t); setError(''); }} style={{
+                            <button key={t} onClick={() => cambiarTab(t)} style={{
                                 flex: 1, padding: '20px', border: 'none', cursor: 'pointer',
                                 fontFamily: font, fontSize: 15, fontWeight: 700,
                                 background: tab === t ? '#fff' : '#F8F9FB',
@@ -166,34 +200,38 @@ export default function Login({ onLogin, onBack }: LoginProps) {
 
                         {tab === 'login' ? (
                             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                <Field label="Correo electrónico" type="email"    value={correo}   onChange={setCorreo}   placeholder="admin@empresa.com" />
-                                <Field label="Contraseña"         type="password" value={password} onChange={setPassword} placeholder="••••••••" />
+                                <Field label="Correo electrónico" type="email"    value={correo}   onChange={setCorreo}   placeholder="admin@empresa.com" name="email"    autoComplete="username" />
+                                <Field label="Contraseña"         type="password" value={password} onChange={setPassword} placeholder="••••••••"          name="password" autoComplete="current-password" />
                                 <SubmitBtn loading={loading}>Ingresar al Sistema</SubmitBtn>
                                 <p style={{ margin: '4px 0 0', textAlign: 'center', fontSize: 13, color: colors.textFaint }}>
                                     ¿Aún no tienes cuenta?{' '}
-                                    <button type="button" onClick={() => { setTab('registro'); setError(''); }} style={{ background: 'none', border: 'none', color: orange, fontWeight: 600, cursor: 'pointer', fontSize: 13, fontFamily: font }}>
+                                    <button type="button" onClick={() => cambiarTab('registro')} style={{ background: 'none', border: 'none', color: orange, fontWeight: 600, cursor: 'pointer', fontSize: 13, fontFamily: font }}>
                                         Regístrate gratis
                                     </button>
                                 </p>
                             </form>
-                        ) : (
-                            <form onSubmit={handleRegistro} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                <Field label="Nombre de tu empresa"   type="text"     value={empresa}   onChange={setEmpresa}   placeholder="Mi Empresa S.A.C." />
-                                <Field label="Tu nombre completo"     type="text"     value={nombre}    onChange={setNombre}    placeholder="Juan Pérez" />
-                                <Field label="Correo electrónico"     type="email"    value={regCorreo} onChange={setRegCorreo} placeholder="juan@empresa.com" />
-                                <Field label="Contraseña"           type="password" value={regPass}  onChange={setRegPass}  placeholder="Mínimo 6 caracteres" />
-                                <Field label="Confirmar contraseña" type="password" value={regPass2} onChange={setRegPass2} placeholder="Repetir contraseña" />
-                                <div style={{ background: colors.blueSoft, borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: colors.blueText, lineHeight: 1.5 }}>
-                                    Se creará tu empresa en Plan Micro. Podrás cambiar el plan desde el panel de administración.
-                                </div>
-                                <SubmitBtn loading={loading}>Crear mi cuenta gratis</SubmitBtn>
+                        ) : regStep === 1 ? (
+                            <form onSubmit={avanzarAPago} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                <Field label="Nombre de tu empresa"   type="text"     value={empresa}   onChange={setEmpresa}   placeholder="Mi Empresa S.A.C." name="organization" autoComplete="organization" />
+                                <Field label="Tu nombre completo"     type="text"     value={nombre}    onChange={setNombre}    placeholder="Juan Pérez"        name="name"         autoComplete="name" />
+                                <Field label="Correo electrónico"     type="email"    value={regCorreo} onChange={setRegCorreo} placeholder="juan@empresa.com"  name="email"        autoComplete="email" />
+                                <Field label="Contraseña"           type="password" value={regPass}  onChange={setRegPass}  placeholder="Mínimo 6 caracteres" name="new-password"     autoComplete="new-password" />
+                                <Field label="Confirmar contraseña" type="password" value={regPass2} onChange={setRegPass2} placeholder="Repetir contraseña"  name="confirm-password" autoComplete="new-password" />
+                                <SubmitBtn loading={false}>Continuar a elegir plan →</SubmitBtn>
                                 <p style={{ margin: '4px 0 0', textAlign: 'center', fontSize: 13, color: colors.textFaint }}>
                                     ¿Ya tienes cuenta?{' '}
-                                    <button type="button" onClick={() => { setTab('login'); setError(''); }} style={{ background: 'none', border: 'none', color: orange, fontWeight: 600, cursor: 'pointer', fontSize: 13, fontFamily: font }}>
+                                    <button type="button" onClick={() => cambiarTab('login')} style={{ background: 'none', border: 'none', color: orange, fontWeight: 600, cursor: 'pointer', fontSize: 13, fontFamily: font }}>
                                         Iniciar sesión
                                     </button>
                                 </p>
                             </form>
+                        ) : (
+                            <PasarelaPago
+                                empresaNombre={empresa}
+                                onBack={() => setRegStep(1)}
+                                onPagar={procesarPago}
+                                onDone={onLogin}
+                            />
                         )}
                     </div>
                 </div>

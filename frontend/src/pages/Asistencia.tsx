@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
-import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Progress, tableStyles, inputStyle, Field, downloadCSV, useToast } from '../components/ui';
+import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Progress, tableStyles, inputStyle, Field, Select, downloadCSV, useToast } from '../components/ui';
 
 const TIPOS = ['Injustificada', 'Justificada', 'Permiso_sin_goce', 'Permiso_con_goce', 'Licencia'];
 const TIPO_TONE: Record<string, any> = {
@@ -40,19 +40,19 @@ function ModalInasistencia({ empleados, onClose, onSaved }: { empleados: any[]; 
                 <h3 style={{ margin: '0 0 18px', fontSize: 18, fontWeight: 700, color: colors.textStrong }}>Registrar Inasistencia</h3>
                 <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <Field label="Colaborador">
-                        <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)} style={inputStyle} required>
+                        <Select value={empleadoId} onChange={setEmpleadoId} required>
                             <option value="">— Seleccionar —</option>
                             {empleados.map((e) => <option key={e.empleado_id} value={e.empleado_id}>{e.nombre || `ID ${e.empleado_id}`}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                     <div style={{ display: 'flex', gap: 12 }}>
                         <Field label="Fecha"><input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputStyle} required /></Field>
                         <Field label="Horas ausentes"><input type="number" min="0" max="24" step="0.5" value={horas} onChange={(e) => setHoras(e.target.value)} style={inputStyle} /></Field>
                     </div>
                     <Field label="Tipo de inasistencia">
-                        <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={inputStyle}>
+                        <Select value={tipo} onChange={setTipo}>
                             {TIPOS.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                     <div style={{ fontSize: 12, color: colors.textMuted, marginTop: -4 }}>
                         {(tipo === 'Injustificada' || tipo === 'Permiso_sin_goce')
@@ -180,10 +180,10 @@ export default function Asistencia() {
                         </div>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                             {empleadoSel && inasistencias.length > 0 && <Btn size="sm" variant="indigo" icon="download" onClick={exportar}>Exportar CSV</Btn>}
-                            <select value={empleadoSel} onChange={(e) => setEmpleadoSel(e.target.value)} style={{ ...inputStyle, width: 240 }}>
+                            <Select value={empleadoSel} onChange={setEmpleadoSel} style={{ width: 240 }}>
                                 <option value="">— Seleccionar colaborador —</option>
                                 {empleados.map((e) => <option key={e.empleado_id} value={e.empleado_id}>{e.nombre || `ID ${e.empleado_id}`}</option>)}
-                            </select>
+                            </Select>
                         </div>
                     </div>
 

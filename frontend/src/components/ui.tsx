@@ -256,6 +256,72 @@ export function Field({ label, children }: { label: string; children: React.Reac
     );
 }
 
+// ───────────────────────── PasswordField ─────────────────────────
+export function PasswordField({ value, onChange, placeholder, autoComplete, required, style }: {
+    value: string; onChange: (v: string) => void; placeholder?: string;
+    autoComplete?: string; required?: boolean; style?: React.CSSProperties;
+}) {
+    const [visible, setVisible] = useState(false);
+    return (
+        <div style={{ position: 'relative' }}>
+            <input
+                type={visible ? 'text' : 'password'}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                autoComplete={autoComplete}
+                required={required}
+                style={{ ...inputStyle, paddingRight: 40, ...style }}
+            />
+            <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setVisible((v) => !v)}
+                aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                    display: 'flex', color: colors.textFaint,
+                }}
+            >
+                <Icon name={visible ? 'eyeOff' : 'eye'} size={17} />
+            </button>
+        </div>
+    );
+}
+
+// ───────────────────────── Select ─────────────────────────
+export function Select({ value, onChange, children, disabled, required, style }: {
+    value: string | number; onChange: (value: string) => void;
+    children: React.ReactNode; disabled?: boolean; required?: boolean; style?: React.CSSProperties;
+}) {
+    const { width, ...restStyle } = style || {};
+    return (
+        <div style={{ position: 'relative', width: width ?? '100%' }}>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
+                required={required}
+                style={{
+                    ...inputStyle, ...restStyle, width: '100%',
+                    appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+                    paddingRight: 36, cursor: disabled ? 'not-allowed' : 'pointer',
+                    background: disabled ? '#F3F4F6' : (restStyle.background ?? '#fff'),
+                }}
+            >
+                {children}
+            </select>
+            <span style={{
+                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                pointerEvents: 'none', color: colors.textFaint, display: 'flex',
+            }}>
+                <Icon name="chevronDown" size={16} />
+            </span>
+        </div>
+    );
+}
+
 // ───────────────────────── Modal ─────────────────────────
 export function Modal({ title, onClose, children, width = 520 }: { title: string; onClose: () => void; children: React.ReactNode; width?: number }) {
     return (

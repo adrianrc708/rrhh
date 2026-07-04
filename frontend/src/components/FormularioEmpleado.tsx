@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
-import { useToast } from './ui';
+import { colors } from '../theme';
+import { Modal, Field, Select, Btn, useToast, inputStyle } from './ui';
 
 interface FormularioProps {
     isOpen: boolean;
@@ -109,106 +110,90 @@ export default function FormularioEmpleado({ isOpen, onClose, onSave, empleadoAE
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-            <div style={{ backgroundColor: '#fff', padding: '30px', borderRadius: '8px', width: '450px', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', fontFamily: 'sans-serif' }}>
+        <Modal title={empleadoAEditar ? 'Modificar Datos de Colaborador' : 'Registrar Nuevo Colaborador'} onClose={onClose} width={480}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                <h3 style={{ margin: '0 0 20px 0', color: '#1f2937', borderBottom: '2px solid #e5e7eb', paddingBottom: '10px' }}>
-                    {empleadoAEditar ? 'Modificar Datos de Colaborador' : 'Registrar Nuevo Colaborador'}
-                </h3>
+                <Field label="Nombre completo">
+                    <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={inputStyle} placeholder="Ej. Juan Pérez Ramos" />
+                </Field>
 
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {/* INTERFAZ CONDICIONAL INTELIGENTE PARA EL ID DE USUARIO ACCOUNT */}
+                {!empleadoAEditar ? (
+                    <Field label="Asociar cuenta de usuario Core">
+                        <Select value={usuarioId} onChange={setUsuarioId} required>
+                            <option value="">-- Seleccionar cuenta del sistema --</option>
+                            {usuariosDisponibles.map((u: any) => (
+                                <option key={u.usuario_id} value={u.usuario_id}>
+                                    {u.nombre} ({u.correo})
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                ) : (
+                    // En modo de edición el campo desaparece de la vista protegiendo la inmutabilidad de la relación
+                    <input type="hidden" value={usuarioId} />
+                )}
 
-                    {/* Campo de Nombre descriptivo */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563' }}>Nombre Completo:</label>
-                        <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '14px' }} placeholder="Ej. Juan Pérez Ramos" />
-                    </div>
-
-                    {/* INTERFAZ CONDICIONAL INTELIGENTE PARA EL ID DE USUARIO ACCOUNT */}
-                    {!empleadoAEditar ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563' }}>Asociar Cuenta de Usuario Core:</label>
-                            <select
-                                value={usuarioId}
-                                onChange={(e) => setUsuarioId(e.target.value)}
-                                required
-                                style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '14px' }}
-                            >
-                                <option value="">-- Seleccionar cuenta del sistema --</option>
-                                {usuariosDisponibles.map((u: any) => (
-                                    <option key={u.usuario_id} value={u.usuario_id}>
-                                        {u.nombre} ({u.correo})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    ) : (
-                        // En modo de edición el campo desaparece de la vista protegiendo la inmutabilidad de la relación
-                        <input type="hidden" value={usuarioId} />
-                    )}
-
-                    {/* SELECTORES DE CONTROL EN CASCADA COMPLETA */}
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 }}>
-                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563' }}>Departamento / Área:</label>
-                            <select
+                {/* SELECTORES DE CONTROL EN CASCADA COMPLETA */}
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Field label="Departamento / Área">
+                            <Select
                                 value={departamentoId}
-                                onChange={(e) => {
-                                    setDepartamentoId(e.target.value);
-                                    setCargoId(''); // Limpiamos el cargo subordinado de inmediato
-                                }}
+                                onChange={(v) => { setDepartamentoId(v); setCargoId(''); }}
                                 required
-                                style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '14px' }}
                             >
                                 <option value="">-- Seleccionar --</option>
                                 {departamentos.map((d: any) => (
                                     <option key={d.departamento_id} value={d.departamento_id}>{d.nombre}</option>
                                 ))}
-                            </select>
-                        </div>
+                            </Select>
+                        </Field>
+                    </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 }}>
-                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563' }}>Cargo / Puesto:</label>
-                            <select
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Field label="Cargo / Puesto">
+                            <Select
                                 value={cargoId}
-                                onChange={(e) => setCargoId(e.target.value)}
+                                onChange={setCargoId}
                                 required
-                                disabled={!departamentoId} // Desactivado si no hay departamento seleccionado
-                                style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: departamentoId ? '#fff' : '#f3f4f6', fontSize: '14px' }}
+                                disabled={!departamentoId}
                             >
                                 <option value="">-- Seleccionar --</option>
                                 {cargosFiltrados.map((c: any) => (
                                     <option key={c.cargo_id} value={c.cargo_id}>{c.nombre}</option>
                                 ))}
-                            </select>
-                        </div>
+                            </Select>
+                        </Field>
                     </div>
+                </div>
 
-                    {/* Datos provisionales y administrativos */}
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 }}>
-                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563' }}>Régimen de Pensión:</label>
-                            <select value={tipoPension} onChange={(e) => setTipoPension(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', backgroundColor: '#fff', fontSize: '14px' }}>
+                {/* Datos provisionales y administrativos */}
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Field label="Régimen de pensión">
+                            <Select value={tipoPension} onChange={setTipoPension}>
                                 <option value="ONP">ONP (Sistema Público)</option>
                                 <option value="AFP Prima">AFP Prima</option>
                                 <option value="AFP Integra">AFP Integra</option>
                                 <option value="AFP Profuturo">AFP Profuturo</option>
-                            </select>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flex: 1 }}>
-                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563' }}>Fecha de Ingreso:</label>
-                            <input type="date" value={fechaIngreso} onChange={(e) => setFechaIngreso(e.target.value)} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '14px' }} />
-                        </div>
+                            </Select>
+                        </Field>
                     </div>
-
-                    {/* Botoneras */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '15px', borderTop: '1px solid #e5e7eb', paddingTop: '15px' }}>
-                        <button type="button" onClick={onClose} style={{ padding: '10px 16px', backgroundColor: '#fff', color: '#374151', border: '1px solid #EAECF2', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>Cancelar</button>
-                        <button type="submit" style={{ padding: '10px 20px', backgroundColor: '#F97316', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>{empleadoAEditar ? 'Guardar Cambios' : 'Registrar Colaborador'}</button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <Field label="Fecha de ingreso">
+                            <input type="date" value={fechaIngreso} onChange={(e) => setFechaIngreso(e.target.value)} required style={inputStyle} />
+                        </Field>
                     </div>
+                </div>
 
-                </form>
-            </div>
-        </div>
+                {/* Botoneras */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 6, borderTop: `1px solid ${colors.border}`, paddingTop: 16 }}>
+                    <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
+                    <Btn type="submit">{empleadoAEditar ? 'Guardar Cambios' : 'Registrar Colaborador'}</Btn>
+                </div>
+
+            </form>
+        </Modal>
     );
 }

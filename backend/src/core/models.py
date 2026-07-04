@@ -96,6 +96,21 @@ class EventoAuditoria(Base):
 
 from sqlalchemy import Boolean
 
+class Pago(Base):
+    __tablename__ = "pagos"
+
+    pago_id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.empresa_id", ondelete="CASCADE"))
+    plan = Column(String(50), nullable=False)
+    num_empleados = Column(Integer, nullable=False)
+    monto = Column(Numeric(10, 2), nullable=False)
+    metodo_pago = Column(String(30), nullable=False)  # Tarjeta | Yape | Transferencia
+    tarjeta_ultimos4 = Column(String(4), nullable=True)
+    referencia = Column(String(50), unique=True, nullable=False)
+    estado = Column(String(20), default="Aprobado")
+    fecha_pago = Column(TIMESTAMP, server_default=func.now())
+
+
 class Notificacion(Base):
     __tablename__ = "notificaciones"
 

@@ -2,13 +2,29 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
 
-# --- Esquema de Registro Público (nueva empresa + admin) ---
+# --- Esquema de Registro Público (nueva empresa + admin + pago del plan) ---
 
 class RegistroEmpresaCreate(BaseModel):
     empresa_nombre: str
     nombre: str
     correo: str
     password: str
+    plan: str                          # Micro | Estándar | Corporativo
+    num_empleados: int
+    metodo_pago: str                   # Tarjeta | Yape | Transferencia
+    tarjeta_ultimos4: Optional[str] = None
+
+class PagoResponse(BaseModel):
+    pago_id: int
+    plan: str
+    num_empleados: int
+    monto: float
+    metodo_pago: str
+    referencia: str
+    estado: str
+
+    class Config:
+        from_attributes = True
 
 # --- Esquemas para Usuarios ---
 
