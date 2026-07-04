@@ -1,7 +1,7 @@
 """agregar_tabla_pagos
 
 Revision ID: bf73f84f8107
-Revises: bcc1487d292f
+Revises: aaa001turnos
 Create Date: 2026-07-04 05:11:26.839285
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'bf73f84f8107'
-down_revision: Union[str, Sequence[str], None] = 'bcc1487d292f'
+down_revision: Union[str, Sequence[str], None] = 'aaa001turnos'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
