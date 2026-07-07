@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { colors, font } from '../theme';
 import api from '../services/api';
 import { Card, PageHeader, Badge, KpiCard, Loading, Empty, tableStyles, Btn, useToast, Modal, Field, Select, inputStyle, PasswordField } from '../components/ui';
+import CamaraFacial, { CamaraHandle } from '../components/CamaraFacial';
 
 // ============================================================================
 // Fase 1 — Portal de aterrizaje del rol Empleado (autogestión).
@@ -146,6 +147,9 @@ export default function MiEspacio() {
                 </div>
             </Card>
 
+            {/* Reconocimiento facial: el empleado se auto-enrola para usar el kiosco */}
+            {perfil?.empleado_id && <MiRostroPanel />}
+
             {/* Portal de autogestión (Fase 5): vacaciones, permisos, descansos médicos */}
             {perfil?.empleado_id && <AutogestionPanel />}
 
@@ -239,6 +243,101 @@ function Dato({ label, valor }: { label: string; valor: string }) {
             <p style={{ margin: 0, fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</p>
             <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 600, color: colors.textStrong }}>{valor}</p>
         </div>
+    );
+}
+
+// ── Reconocimiento facial: auto-enrolamiento del empleado ──────────────────
+interface MiRostro { id: number; etiqueta?: string; fecha_creacion?: string; }
+const MAX_MUESTRAS = 3;
+
+function MiRostroPanel() {
+    const toast = useToast();
+    const camaraRef = useRef<CamaraHandle>(null);
+    const [rostros, setRostros] = useState<MiRostro[]>([]);
+    const [cargando, setCargando] = useState(true);
+    const [enrolando, setEnrolando] = useState(false);
+    const disparadoRef = useRef(false);
+    const vistoDesdeRef = useRef<number | null>(null);
+
+    const cargar = async () => {
+        try { const r = await api.get('/asistencia/rostros/mi-rostro'); setRostros(Array.isArray(r.data) ? r.data : []); }
+        catch { setRostros([]); } finally { setCargando(false); }
+    };
+    useEffect(() => { cargar(); }, []);
+
+    const enrolar = async () => {
+        setEnrolando(true);
+        try {
+            const descriptor = await camaraRef.current?.capturarDescriptor();
+            if (!descriptor) { toast('error', 'No se detectó tu rostro. Acércate y mira a la cámara.'); return; }
+            await api.post('/asistencia/rostros/mi-rostro', { descriptor, etiqueta: `muestra ${rostros.length + 1}` });
+            toast('success', 'Rostro registrado. Ya puedes marcar en el kiosco facial.');
+            cargar();
+        } catch (err: any) {
+            toast('error', err?.response?.data?.detail || 'No se pudo registrar tu rostro.');
+        } finally { setEnrolando(false); }
+    };
+
+    const eliminar = async (id: number) => {
+        try { await api.delete(`/asistencia/rostros/mi-rostro/${id}`); cargar(); }
+        catch (e: any) { toast('error', e?.response?.data?.detail || 'No se pudo eliminar.'); }
+    };
+
+    // Auto-captura: en cuanto la cámara sostiene un rostro estable, registra la
+    // muestra sola — el empleado solo tiene que "mostrar la cara", sin botones.
+    const alCupo = rostros.length >= MAX_MUESTRAS;
+    useEffect(() => {
+        if (alCupo || cargando) return;
+        const id = setInterval(() => {
+            const cam = camaraRef.current;
+            if (!cam || !cam.listo || enrolando) return;
+
+            if (!cam.rostroDetectado) {
+                disparadoRef.current = false;
+                vistoDesdeRef.current = null;
+                return;
+            }
+            if (disparadoRef.current) return;
+            if (vistoDesdeRef.current === null) { vistoDesdeRef.current = Date.now(); return; }
+            if (Date.now() - vistoDesdeRef.current < 600) return;
+
+            disparadoRef.current = true;
+            enrolar();
+        }, 250);
+        return () => clearInterval(id);
+    }, [alCupo, cargando, enrolando, rostros.length]);
+
+    return (
+        <Card style={{ marginBottom: 28 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: colors.textStrong }}>Reconocimiento facial</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: colors.textMuted }}>
+                Muestra tu rostro a la cámara para poder marcar tu entrada/salida en el kiosco facial, sin token ni contraseña.
+                Se registra apenas te vea sostenido unos segundos — no necesitas apretar nada.
+            </p>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                <div>
+                    {alCupo ? (
+                        <div style={{ width: 300, height: 225, borderRadius: 12, background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, fontSize: 13, textAlign: 'center', padding: 16 }}>
+                            Ya tienes {MAX_MUESTRAS} muestras registradas.<br />Elimina una para volver a capturar.
+                        </div>
+                    ) : (
+                        <CamaraFacial ref={camaraRef} ancho={300} alto={225} />
+                    )}
+                    {enrolando && <p style={{ margin: '10px 0 0', fontSize: 12.5, color: colors.textMuted }}>Registrando…</p>}
+                </div>
+                <div style={{ flex: '1 1 200px', minWidth: 200 }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: colors.textStrong }}>Muestras registradas: {rostros.length}/{MAX_MUESTRAS}</p>
+                    {cargando ? <Loading /> : rostros.length === 0 ? <Empty text="Aún no registras tu rostro." /> : (
+                        rostros.map((r) => (
+                            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: colors.bg, borderRadius: 8, marginBottom: 6 }}>
+                                <span style={{ fontSize: 13, color: colors.textBody }}>{r.etiqueta || `Rostro #${r.id}`}</span>
+                                <Btn size="sm" variant="ghost" icon="trash" onClick={() => eliminar(r.id)}>Eliminar</Btn>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </Card>
     );
 }
 

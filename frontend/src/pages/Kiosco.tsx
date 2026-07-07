@@ -17,7 +17,8 @@ const kioscoApi = axios.create({ baseURL: import.meta.env.VITE_API_URL });
 
 const LS_TOKEN = 'kiosk_device_token';
 const LS_NOMBRE = 'kiosk_device_nombre';
-const INTERVALO_ESCANEO = 2500;
+const POLL_PRESENCIA = 250;      // chequeo liviano de "¿hay alguien enfrente?"
+const ESTABLE_ANTES_DE_CAPTURAR = 500; // exige rostro sostenido para no capturar un frame borroso de paso
 const PAUSA_TRAS_MARCAR = 5000;
 
 type Resultado = { nombre: string; tipo: string; hora: string } | null;
@@ -52,10 +53,19 @@ function Provisionar({ onListo }: { onListo: (token: string, nombre: string) => 
         } finally { setCargando(false); }
     };
 
+    // Sin token/PIN aún no hay forma de entrar al kiosco: el logo es la única salida
+    // de vuelta a la landing (quita "?kiosco" de la URL y recarga la app normal).
+    const salirDelKiosco = () => { window.location.href = window.location.origin + window.location.pathname; };
+
     return (
         <Contenedor>
             <div style={{ background: '#fff', borderRadius: 24, padding: '40px 44px', width: 440, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}><OmniaLogo variant="full" width={200} /></div>
+                <div
+                    onClick={salirDelKiosco} title="Salir del modo kiosco"
+                    style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, cursor: 'pointer' }}
+                >
+                    <OmniaLogo variant="full" width={200} sobreClaro />
+                </div>
                 <h2 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: colors.textStrong, textAlign: 'center' }}>Activar Kiosco</h2>
                 <p style={{ margin: '0 0 24px', fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>Ingresa el token y PIN del dispositivo (te lo entrega RRHH).</p>
                 {error && <div style={{ background: colors.redSoft, color: colors.redText, padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
@@ -87,11 +97,21 @@ function Escaner({ token, nombreDisp, onSalir }: { token: string; nombreDisp: st
         return () => clearInterval(t);
     }, []);
 
+    // En vez de intentar marcar "a ciegas" cada X segundos, esperamos a ver un
+    // rostro sostenido frente a la cámara (evita descriptores de un frame borroso
+    // y hace que el escaneo se sienta instantáneo apenas alguien se para enfrente).
+    const vistoDesde = useRef<number | null>(null);
+
     useEffect(() => {
         const id = setInterval(async () => {
             if (ocupado.current || estado === 'pausa') return;
             const cam = camaraRef.current;
             if (!cam || !cam.listo) return;
+
+            if (!cam.rostroDetectado) { vistoDesde.current = null; return; }
+            if (vistoDesde.current === null) { vistoDesde.current = Date.now(); return; }
+            if (Date.now() - vistoDesde.current < ESTABLE_ANTES_DE_CAPTURAR) return;
+
             ocupado.current = true;
             try {
                 const descriptor = await cam.capturarDescriptor();
@@ -117,8 +137,9 @@ function Escaner({ token, nombreDisp, onSalir }: { token: string; nombreDisp: st
                 }
             } finally {
                 ocupado.current = false;
+                vistoDesde.current = null; // exige alejarse y volver a acercarse para el próximo intento
             }
-        }, INTERVALO_ESCANEO);
+        }, POLL_PRESENCIA);
         return () => clearInterval(id);
     }, [estado, token]);
 
@@ -131,7 +152,7 @@ function Escaner({ token, nombreDisp, onSalir }: { token: string; nombreDisp: st
                 <Icon name="logout" size={14} /> Salir
             </button>
 
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ textAlign: 'center', marginBottom: 20, pointerEvents: 'none' }}>
                 <OmniaLogo variant="full" width={180} />
                 <p style={{ margin: '10px 0 0', color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>{nombreDisp} · {hora.toLocaleTimeString('es-PE')}</p>
             </div>

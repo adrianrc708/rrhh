@@ -29,7 +29,7 @@ from src.attendance.models import (
 from src.attendance.schemas import (
     InasistenciaCreate, InasistenciaResponse,
     DispositivoCreate, DispositivoResponse, DispositivoCreado,
-    RostroCreate, RostroResponse, MarcarRemoto, MarcacionResponse,
+    RostroCreate, RostroAutoCreate, RostroResponse, MarcarRemoto, MarcacionResponse,
     CicloJornadaCreate, CicloJornadaResponse, ConciliacionItem, CierreResponse,
 )
 from src.hr.models import Empleado
@@ -333,6 +333,76 @@ def eliminar_rostro(
     rostro = db.query(RostroEmpleado).filter(
         RostroEmpleado.id == rostro_id,
         RostroEmpleado.empresa_id == usuario_actual.empresa_id,
+        RostroEmpleado.is_deleted.is_(False),
+    ).first()
+    if not rostro:
+        raise HTTPException(status_code=404, detail="Rostro no encontrado")
+    rostro.is_deleted = True
+    rostro.activo = False
+    db.commit()
+
+
+# ============================================================================
+# Auto-enrolamiento facial (Empleado autenticado, sin permisos de Admin/RRHH)
+# ============================================================================
+MAX_MUESTRAS_AUTOENROLAMIENTO = 3
+
+
+@router.post("/rostros/mi-rostro", response_model=RostroResponse, status_code=status.HTTP_201_CREATED)
+def enrolar_mi_rostro(
+    datos: RostroAutoCreate,
+    db: Session = Depends(get_db),
+    empleado: Empleado = Depends(obtener_empleado_actual),
+):
+    """El propio empleado registra su rostro desde Mi Espacio para poder usar el kiosco."""
+    try:
+        descriptor = biometrics.validar_descriptor(datos.descriptor)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    activas = db.query(RostroEmpleado).filter(
+        RostroEmpleado.empleado_id == empleado.empleado_id,
+        RostroEmpleado.activo.is_(True),
+        RostroEmpleado.is_deleted.is_(False),
+    ).count()
+    if activas >= MAX_MUESTRAS_AUTOENROLAMIENTO:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ya tienes {MAX_MUESTRAS_AUTOENROLAMIENTO} muestras registradas. Elimina una para volver a enrolar.",
+        )
+
+    rostro = RostroEmpleado(
+        empresa_id=empleado.empresa_id,
+        empleado_id=empleado.empleado_id,
+        descriptor=json.dumps(descriptor),
+        etiqueta=datos.etiqueta or "autoenrolamiento",
+    )
+    db.add(rostro)
+    db.commit()
+    db.refresh(rostro)
+    return rostro
+
+
+@router.get("/rostros/mi-rostro", response_model=List[RostroResponse])
+def listar_mi_rostro(
+    db: Session = Depends(get_db),
+    empleado: Empleado = Depends(obtener_empleado_actual),
+):
+    return db.query(RostroEmpleado).filter(
+        RostroEmpleado.empleado_id == empleado.empleado_id,
+        RostroEmpleado.is_deleted.is_(False),
+    ).all()
+
+
+@router.delete("/rostros/mi-rostro/{rostro_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_mi_rostro(
+    rostro_id: int,
+    db: Session = Depends(get_db),
+    empleado: Empleado = Depends(obtener_empleado_actual),
+):
+    rostro = db.query(RostroEmpleado).filter(
+        RostroEmpleado.id == rostro_id,
+        RostroEmpleado.empleado_id == empleado.empleado_id,
         RostroEmpleado.is_deleted.is_(False),
     ).first()
     if not rostro:

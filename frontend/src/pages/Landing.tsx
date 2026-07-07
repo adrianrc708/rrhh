@@ -293,7 +293,10 @@ export default function Landing({ onEnter }: { onEnter: () => void }) {
                 <OmniaLogo variant="compact" width={170} />
 
                 {/* Links centrados */}
-                <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
+                {/* marginRight fijo: con justify-content:space-between el hueco hacia "Acciones"
+                    se achica en pantallas medianas (el bloque de acciones es ancho); esto
+                    garantiza aire respecto al botón "Modo Kiosco" sin importar el viewport. */}
+                <div style={{ display: 'flex', gap: 40, alignItems: 'center', marginRight: 32 }}>
                     <NavLink href="#funcionalidades">Funcionalidades</NavLink>
                     <NavLink href="#precios">Precios</NavLink>
                     <NavLink href="#pilares">Por qué Omnia</NavLink>

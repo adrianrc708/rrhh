@@ -40,6 +40,13 @@ export async function cargarFaceApi(): Promise<any> {
     return faceapi;
 }
 
+// inputSize más grande (416 vs 320) mejora la detección con caras chicas/lejos de la
+// cámara o con poca luz; scoreThreshold más bajo (0.4 vs 0.5) la hace menos exigente.
+// El costo en velocidad es marginal para TinyFaceDetector.
+function opcionesDeteccion(faceapi: any) {
+    return new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
+}
+
 /**
  * Calcula el descriptor facial (128 floats) a partir de un elemento <video> o
  * <canvas>/<img>. Devuelve null si no se detecta un rostro.
@@ -47,9 +54,20 @@ export async function cargarFaceApi(): Promise<any> {
 export async function obtenerDescriptor(fuente: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement): Promise<number[] | null> {
     const faceapi = await cargarFaceApi();
     const deteccion = await faceapi
-        .detectSingleFace(fuente, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+        .detectSingleFace(fuente, opcionesDeteccion(faceapi))
         .withFaceLandmarks()
         .withFaceDescriptor();
     if (!deteccion) return null;
     return Array.from(deteccion.descriptor as Float32Array);
+}
+
+/**
+ * Detección liviana (sin landmarks ni descriptor) para feedback en vivo: solo
+ * responde si hay un rostro en el cuadro actual. Mucho más barata que
+ * `obtenerDescriptor`, pensada para correr en loop mientras la cámara está activa.
+ */
+export async function hayRostro(fuente: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement): Promise<boolean> {
+    const faceapi = await cargarFaceApi();
+    const deteccion = await faceapi.detectSingleFace(fuente, opcionesDeteccion(faceapi));
+    return !!deteccion;
 }

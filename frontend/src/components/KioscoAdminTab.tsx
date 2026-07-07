@@ -20,6 +20,7 @@ export default function KioscoAdminTab({ empleados }: { empleados: any[] }) {
     const [empleadoSel, setEmpleadoSel] = useState('');
     const [rostros, setRostros] = useState<any[]>([]);
     const [enrolando, setEnrolando] = useState(false);
+    const [autoEnrolar, setAutoEnrolar] = useState(true);
 
     const cargarDispositivos = async () => {
         try { const r = await api.get('/asistencia/dispositivos'); setDispositivos(r.data); }
@@ -33,6 +34,32 @@ export default function KioscoAdminTab({ empleados }: { empleados: any[] }) {
         catch { setRostros([]); }
     };
     useEffect(() => { cargarRostros(empleadoSel); }, [empleadoSel]);
+
+    // Auto-enrolamiento: en vez de esperar el clic manual, dispara la captura solo
+    // cuando la cámara sostiene un rostro estable (evita frames borrosos de paso).
+    // Se re-arma cuando el rostro sale de cuadro, para no repetir en loop.
+    const disparadoRef = useRef(false);
+    const vistoDesdeRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!autoEnrolar || !empleadoSel) return;
+        const id = setInterval(() => {
+            const cam = camaraRef.current;
+            if (!cam || !cam.listo || enrolando) return;
+
+            if (!cam.rostroDetectado) {
+                disparadoRef.current = false;
+                vistoDesdeRef.current = null;
+                return;
+            }
+            if (disparadoRef.current) return;
+            if (vistoDesdeRef.current === null) { vistoDesdeRef.current = Date.now(); return; }
+            if (Date.now() - vistoDesdeRef.current < 600) return;
+
+            disparadoRef.current = true;
+            enrolar();
+        }, 250);
+        return () => clearInterval(id);
+    }, [autoEnrolar, empleadoSel, enrolando]);
 
     const crearDispositivo = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,8 +152,12 @@ export default function KioscoAdminTab({ empleados }: { empleados: any[] }) {
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
                     <CamaraFacial ref={camaraRef} ancho={300} alto={225} />
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: colors.textMuted, marginBottom: 10, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={autoEnrolar} onChange={(e) => setAutoEnrolar(e.target.checked)} />
+                    Enrolar automáticamente al detectar el rostro estable (recomendado)
+                </label>
                 <Btn icon="check" disabled={enrolando || !empleadoSel} onClick={enrolar} style={{ width: '100%', justifyContent: 'center' }}>
-                    {enrolando ? 'Procesando…' : 'Capturar y enrolar'}
+                    {enrolando ? 'Procesando…' : autoEnrolar ? 'Capturar ahora (o espera la detección automática)' : 'Capturar y enrolar'}
                 </Btn>
                 {empleadoSel && (
                     <div style={{ marginTop: 16 }}>

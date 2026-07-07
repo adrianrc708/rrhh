@@ -1,12 +1,15 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { colors, radius } from '../theme';
-import { obtenerDescriptor, cargarFaceApi } from '../lib/faceapi';
+import { obtenerDescriptor, cargarFaceApi, hayRostro } from '../lib/faceapi';
+
+const INTERVALO_DETECCION_VIVO = 400;
 
 // Cámara web reutilizable (kiosco y enrolamiento). Expone `capturarDescriptor`
 // de forma imperativa vía ref.
 export interface CamaraHandle {
     capturarDescriptor: () => Promise<number[] | null>;
     listo: boolean;
+    rostroDetectado: boolean;
 }
 
 interface Props {
@@ -19,6 +22,7 @@ const CamaraFacial = forwardRef<CamaraHandle, Props>(({ ancho = 360, alto = 270,
     const videoRef = useRef<HTMLVideoElement>(null);
     const [error, setError] = useState('');
     const [listo, setListo] = useState(false);
+    const [rostroDetectado, setRostroDetectado] = useState(false);
 
     useEffect(() => {
         let stream: MediaStream | null = null;
@@ -67,13 +71,33 @@ const CamaraFacial = forwardRef<CamaraHandle, Props>(({ ancho = 360, alto = 270,
         return () => { cancelado = true; stream?.getTracks().forEach((t) => t.stop()); };
     }, []);
 
+    // Feedback en vivo: detector liviano en loop para que el usuario sepa, en tiempo
+    // real, si la cámara lo está viendo — en vez de enterarse recién al capturar.
+    useEffect(() => {
+        if (!listo) { setRostroDetectado(false); return; }
+        let cancelado = false;
+        let ocupado = false;
+        const id = setInterval(async () => {
+            if (ocupado || cancelado || !videoRef.current) return;
+            ocupado = true;
+            try {
+                const detectado = await hayRostro(videoRef.current);
+                if (!cancelado) setRostroDetectado(detectado);
+            } catch {
+                /* si falla la detección liviana, no interrumpe la captura real */
+            } finally { ocupado = false; }
+        }, INTERVALO_DETECCION_VIVO);
+        return () => { cancelado = true; clearInterval(id); };
+    }, [listo]);
+
     useImperativeHandle(ref, () => ({
         listo,
+        rostroDetectado,
         capturarDescriptor: async () => {
             if (!videoRef.current || !listo) return null;
             return obtenerDescriptor(videoRef.current);
         },
-    }), [listo]);
+    }), [listo, rostroDetectado]);
 
     return (
         <div style={{ position: 'relative', width: ancho }}>
@@ -86,12 +110,24 @@ const CamaraFacial = forwardRef<CamaraHandle, Props>(({ ancho = 360, alto = 270,
                 style={{
                     width: ancho, height: alto, objectFit: 'cover', borderRadius: radius.lg,
                     background: '#0b0d1c', transform: espejo ? 'scaleX(-1)' : 'none',
-                    border: `2px solid ${colors.border}`,
+                    border: `2px solid ${listo && rostroDetectado ? '#22c55e' : colors.border}`,
+                    transition: 'border-color .15s',
                 }}
             />
             {!listo && !error && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14 }}>
                     Iniciando cámara…
+                </div>
+            )}
+            {listo && !error && (
+                <div style={{
+                    position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999,
+                    background: rostroDetectado ? 'rgba(34,197,94,0.85)' : 'rgba(0,0,0,0.55)',
+                    color: '#fff', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+                }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: rostroDetectado ? '#fff' : '#FCA5A5' }} />
+                    {rostroDetectado ? 'Rostro detectado' : 'Buscando rostro… acércate y mira a la cámara'}
                 </div>
             )}
             {error && (

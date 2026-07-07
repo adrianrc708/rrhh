@@ -68,6 +68,11 @@ class RostroCreate(BaseModel):
     descriptor: List[float]
     etiqueta: Optional[str] = None
 
+class RostroAutoCreate(BaseModel):
+    """Auto-enrolamiento: el empleado se registra a sí mismo (empleado_id viene de su sesión)."""
+    descriptor: List[float]
+    etiqueta: Optional[str] = None
+
 class RostroResponse(BaseModel):
     id: int
     empleado_id: int
