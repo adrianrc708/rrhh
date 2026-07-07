@@ -18,6 +18,7 @@ from src.hr.vacaciones_models import SolicitudVacaciones
 from src.attendance.models import *
 from src.attendance.turno_models import Turno, AsignacionTurno
 from src.payroll.models import *
+from src.payroll.beneficios_models import BeneficioSocial
 
 # Objeto de configuración de Alembic
 config = context.config

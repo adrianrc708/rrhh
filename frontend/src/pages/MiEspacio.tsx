@@ -50,6 +50,14 @@ interface SolicitudVacaciones {
 
 const ESTADO_VAC_TONE: Record<string, any> = { Pendiente: 'amber', Aprobada: 'green', Rechazada: 'red', Cancelada: 'gray' };
 
+interface Beneficio {
+    id: number;
+    tipo: string;
+    periodo: string;
+    monto_neto: number;
+    estado: string;
+}
+
 const soles = (n: number | string) =>
     'S/ ' + Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -61,6 +69,7 @@ export default function MiEspacio() {
     const [marcando, setMarcando] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
 
     // Fase 5 — Vacaciones (autogestión)
     const [saldoVac, setSaldoVac] = useState<SaldoVacacional | null>(null);
@@ -121,6 +130,7 @@ export default function MiEspacio() {
                     setContratos(res.data);
                     cargarMarcaciones(p.empleado_id);
                     cargarVacaciones();
+                    api.get('/beneficios/mis-beneficios').then((r) => setBeneficios(r.data)).catch(() => setBeneficios([]));
                 }
             } catch (e: any) {
                 setError(e?.response?.data?.detail || 'No se pudieron cargar tus datos.');
@@ -282,6 +292,35 @@ export default function MiEspacio() {
                             </tbody>
                         </table>
                     )}
+                </Card>
+            )}
+
+            {/* Beneficios sociales (Fase 5): gratificación y CTS */}
+            {beneficios.length > 0 && (
+                <Card style={{ marginBottom: 28 }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.textStrong }}>Mis beneficios sociales</h3>
+                    <table style={tableStyles.table as React.CSSProperties}>
+                        <thead><tr>
+                            <th style={tableStyles.th as React.CSSProperties}>Beneficio</th>
+                            <th style={tableStyles.th as React.CSSProperties}>Periodo</th>
+                            <th style={{ ...(tableStyles.th as React.CSSProperties), textAlign: 'right' }}>Monto neto</th>
+                            <th style={tableStyles.th as React.CSSProperties}>Estado</th>
+                        </tr></thead>
+                        <tbody>
+                            {beneficios.map((b) => (
+                                <tr key={`${b.tipo}-${b.id}`}>
+                                    <td style={tableStyles.td as React.CSSProperties}>
+                                        <Badge tone={b.tipo === 'Gratificacion' ? 'purple' : 'blue'}>{b.tipo}</Badge>
+                                    </td>
+                                    <td style={tableStyles.td as React.CSSProperties}>{b.periodo}</td>
+                                    <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right', fontWeight: 700, color: colors.textStrong }}>{soles(b.monto_neto)}</td>
+                                    <td style={tableStyles.td as React.CSSProperties}>
+                                        <Badge tone={b.estado === 'Pagado' ? 'green' : 'amber'}>{b.estado}</Badge>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </Card>
             )}
 

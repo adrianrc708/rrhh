@@ -3,6 +3,7 @@ import api from '../services/api';
 import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
 import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, tableStyles, inputStyle, Field, Select, downloadCSV, useToast } from '../components/ui';
+import BeneficiosSocialesTab from '../components/BeneficiosSocialesTab';
 
 const money = (n: any) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ESTADO_TONE: Record<string, any> = { Borrador: 'gray', Revision: 'amber', Aprobado: 'blue', Pagado: 'green' };
@@ -254,6 +255,7 @@ export default function Nomina() {
                             `Auditoría Normativa${alertas.length ? ` (${alertas.length})` : ''}`,
                             'Distribución de Boletas',
                             'Historial',
+                            'Beneficios Sociales',
                         ]}
                         active={tab}
                         onChange={setTab}
@@ -429,6 +431,8 @@ export default function Nomina() {
                                     )}
                                 </Card>
                             )}
+
+                            {tab === 'Beneficios Sociales' && <BeneficiosSocialesTab />}
                         </>
                     )}
                 </>

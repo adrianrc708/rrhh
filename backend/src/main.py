@@ -12,6 +12,7 @@ from src.payroll.router import router as payroll_router
 from src.admin.router import router as admin_router
 from src.ai.router import router as ai_router                  # ← Fase 4
 from src.hr.vacaciones_router import router as vacaciones_router  # ← Fase 5
+from src.payroll.beneficios_router import router as beneficios_router  # ← Fase 5
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,6 +44,7 @@ app.include_router(payroll_router,    prefix="/api/nominas",    tags=["Nómina y
 app.include_router(admin_router,      prefix="/api/admin",      tags=["Admin"])
 app.include_router(ai_router,         prefix="/api/ia",         tags=["Copiloto IA"])   # ← Fase 4
 app.include_router(vacaciones_router, prefix="/api/vacaciones", tags=["Vacaciones"])    # ← Fase 5
+app.include_router(beneficios_router, prefix="/api/beneficios", tags=["Beneficios Sociales"])  # ← Fase 5
 
 
 @app.get("/")

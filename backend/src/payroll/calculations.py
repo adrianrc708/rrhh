@@ -113,6 +113,68 @@ def calcular_impuesto_renta_5ta(
     return _r(impuesto_anual / 12)
 
 
+def calcular_gratificacion(
+    sueldo_base: Decimal,
+    meses_computados: int,
+    tipo_pension: str,
+    porcentaje_afp: Optional[Decimal] = None,
+    params: Optional[Dict[str, Decimal]] = None,
+) -> dict:
+    """
+    Gratificación legal (Fiestas Patrias / Navidad).
+    Remuneración computable = sueldo básico. 1 sueldo si laboró el semestre
+    completo (6 meses); proporcional si ingresó durante el semestre.
+    Está afecta a pensión (ONP/AFP) pero NO a EsSalud: en su lugar el
+    empleador transfiere al trabajador una bonificación extraordinaria del 9%
+    (Ley 29351), que no está sujeta a ningún descuento.
+    """
+    p = _params(params)
+    sueldo_base = Decimal(str(sueldo_base))
+    meses = min(6, max(0, int(meses_computados)))
+
+    gratificacion_bruta = _r(sueldo_base * meses / 6)
+    bonificacion_extraordinaria = _r(gratificacion_bruta * Decimal("0.09"))
+    aporte_pension = calcular_aporte_pension(gratificacion_bruta, tipo_pension, porcentaje_afp, p)
+    monto_neto = gratificacion_bruta - aporte_pension + bonificacion_extraordinaria
+
+    return {
+        "meses_computados": meses,
+        "remuneracion_computable": sueldo_base,
+        "monto_bruto": gratificacion_bruta,
+        "bonificacion_extraordinaria": bonificacion_extraordinaria,
+        "aporte_pension": aporte_pension,
+        "monto_neto": monto_neto,
+    }
+
+
+def calcular_cts(
+    sueldo_base: Decimal,
+    meses_computados: int,
+    ultima_gratificacion: Decimal = Decimal("0"),
+) -> dict:
+    """
+    Compensación por Tiempo de Servicios (depósito de mayo / noviembre).
+    Remuneración computable = sueldo básico + 1/6 de la última gratificación
+    percibida. CTS = remuneración computable × (meses del periodo / 12).
+    Es intangible: no está afecta a pensión, IR ni ningún otro descuento.
+    (Simplificación: se computa por meses completos de servicio en el
+    semestre, sin prorrateo por fracción de día.)
+    """
+    sueldo_base = Decimal(str(sueldo_base))
+    ultima_gratificacion = Decimal(str(ultima_gratificacion or 0))
+    meses = min(6, max(0, int(meses_computados)))
+
+    remuneracion_computable = _r(sueldo_base + (ultima_gratificacion / 6))
+    monto_cts = _r(remuneracion_computable * meses / 12)
+
+    return {
+        "meses_computados": meses,
+        "remuneracion_computable": remuneracion_computable,
+        "monto_bruto": monto_cts,
+        "monto_neto": monto_cts,
+    }
+
+
 def calcular_planilla_empleado(
     sueldo_base: Decimal,
     horas_contrato_mes: Decimal,
