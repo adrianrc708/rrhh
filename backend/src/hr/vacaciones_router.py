@@ -12,10 +12,10 @@ from src.core.dependencies import obtener_usuario_actual, obtener_empleado_actua
 from src.core.services import registrar_auditoria
 from src.hr.models import Empleado
 from src.hr.vacaciones_models import SolicitudVacaciones
+from src.hr.vacaciones_calculo import dias_devengados
 
 router = APIRouter()
 
-DIAS_POR_MES = 2.5          # 30 días / 12 meses (D.L. 713)
 MINIMO_FRACCIONAMIENTO = 7   # días naturales continuos mínimos por solicitud
 
 
@@ -54,19 +54,8 @@ class RechazoRequest(BaseModel):
     motivo: Optional[str] = None
 
 
-# ── Cálculo de devengo (D.L. 713): 2.5 días por mes completo de servicio ──
-
-def _dias_devengados(fecha_ingreso: Optional[date], hasta: date) -> int:
-    if not fecha_ingreso or hasta < fecha_ingreso:
-        return 0
-    meses = (hasta.year - fecha_ingreso.year) * 12 + (hasta.month - fecha_ingreso.month)
-    if hasta.day < fecha_ingreso.day:
-        meses -= 1
-    return int(max(0, meses) * DIAS_POR_MES)
-
-
 def _calcular_saldo(db: Session, empleado: Empleado) -> SaldoResponse:
-    devengados = _dias_devengados(empleado.fecha_ingreso, date.today())
+    devengados = dias_devengados(empleado.fecha_ingreso, date.today())
     comprometidos = db.query(func.coalesce(func.sum(SolicitudVacaciones.dias_solicitados), 0)).filter(
         SolicitudVacaciones.empleado_id == empleado.empleado_id,
         SolicitudVacaciones.estado.in_(["Pendiente", "Aprobada"]),

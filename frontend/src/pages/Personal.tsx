@@ -1,10 +1,87 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { colors } from '../theme';
-import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downloadCSV, useToast, Select, PasswordField } from '../components/ui';
+import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downloadCSV, useToast, Select, PasswordField, Modal, Field, inputStyle } from '../components/ui';
 import FormularioEmpleado from '../components/FormularioEmpleado';
 import Estructura from '../components/Estructura';
 import Contratos from '../components/Contratos';
+
+const soles = (n: number) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function FilaLiquidacion({ label, sub, valor }: { label: string; sub: string; valor: number }) {
+    return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: colors.textStrong }}>{label}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: colors.textMuted }}>{sub}</p>
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 700, color: colors.textStrong }}>{soles(valor)}</span>
+        </div>
+    );
+}
+
+function ModalLiquidacion({ empleado, onClose, onDone }: { empleado: any; onClose: () => void; onDone: () => void }) {
+    const toast = useToast();
+    const [fechaCese, setFechaCese] = useState(new Date().toISOString().slice(0, 10));
+    const [motivo, setMotivo] = useState('Renuncia');
+    const [calculando, setCalculando] = useState(false);
+    const [resultado, setResultado] = useState<any | null>(null);
+
+    const calcular = async () => {
+        setCalculando(true);
+        try {
+            const res = await api.post('/liquidaciones/calcular', {
+                empleado_id: empleado.empleado_id, fecha_cese: fechaCese, motivo,
+            });
+            setResultado(res.data);
+            toast('success', 'Liquidación calculada. El colaborador fue dado de baja.');
+        } catch (err: any) {
+            toast('error', err?.response?.data?.detail || 'No se pudo calcular la liquidación.');
+        } finally { setCalculando(false); }
+    };
+
+    const cerrar = () => { onClose(); if (resultado) onDone(); };
+
+    return (
+        <Modal title={`Liquidación — ${empleado.nombre || 'colaborador'}`} onClose={cerrar} width={480}>
+            {!resultado ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <Field label="Fecha de cese">
+                        <input type="date" value={fechaCese} onChange={(e) => setFechaCese(e.target.value)} style={inputStyle} />
+                    </Field>
+                    <Field label="Motivo">
+                        <Select value={motivo} onChange={setMotivo}>
+                            <option value="Renuncia">Renuncia</option>
+                            <option value="Despido">Despido</option>
+                            <option value="Mutuo_acuerdo">Mutuo acuerdo</option>
+                            <option value="Fin_contrato">Fin de contrato</option>
+                        </Select>
+                    </Field>
+                    <p style={{ margin: 0, fontSize: 12, color: colors.textMuted, background: colors.blueSoft, padding: '10px 12px', borderRadius: 8, lineHeight: 1.5 }}>
+                        Se calcularán las vacaciones truncas, la gratificación trunca y la CTS trunca. El colaborador quedará dado de baja automáticamente.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                        <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
+                        <Btn variant="danger" onClick={calcular} disabled={calculando}>{calculando ? 'Calculando…' : 'Calcular y dar de baja'}</Btn>
+                    </div>
+                </div>
+            ) : (
+                <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+                        <FilaLiquidacion label="Vacaciones truncas" sub={`${resultado.dias_vacaciones_truncas} días pendientes`} valor={resultado.monto_vacaciones_truncas} />
+                        <FilaLiquidacion label="Gratificación trunca" sub={`${resultado.meses_gratificacion_trunca} mes(es) + bonificación 9%`} valor={resultado.monto_gratificacion_trunca + resultado.bonificacion_extraordinaria} />
+                        <FilaLiquidacion label="CTS trunca" sub={`${resultado.meses_cts_trunca} mes(es) de servicio`} valor={resultado.monto_cts_trunca} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${colors.border}`, paddingTop: 14 }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: colors.textStrong }}>Total a liquidar</span>
+                        <span style={{ fontSize: 24, fontWeight: 800, color: colors.textStrong }}>{soles(resultado.monto_total)}</span>
+                    </div>
+                    <Btn style={{ width: '100%', justifyContent: 'center', marginTop: 22 }} onClick={cerrar}>Listo</Btn>
+                </div>
+            )}
+        </Modal>
+    );
+}
 
 function Directorio() {
     const toast = useToast();
@@ -12,6 +89,7 @@ function Directorio() {
     const [cargando, setCargando] = useState(true);
     const [modalAbierto, setModalAbierto] = useState(false);
     const [empleadoEdit, setEmpleadoEdit] = useState<any | null>(null);
+    const [empleadoLiquidar, setEmpleadoLiquidar] = useState<any | null>(null);
 
     const cargar = async () => {
         try {
@@ -27,17 +105,6 @@ function Directorio() {
     };
 
     useEffect(() => { cargar(); }, []);
-
-    const handleBaja = async (id: number) => {
-        if (!window.confirm('¿Registrar la BAJA de este colaborador? Sus contratos vigentes pasarán a vencidos automáticamente.')) return;
-        try {
-            await api.patch(`/empleados/${id}`, { estado: 'Inactivo' });
-            cargar();
-        } catch (err) {
-            console.error('Error al dar de baja:', err);
-            toast('error', 'No se pudo procesar la baja del colaborador.');
-        }
-    };
 
     const handleReactivar = async (id: number) => {
         try {
@@ -97,7 +164,7 @@ function Directorio() {
                                         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                                             <Btn size="sm" variant="outline" icon="edit" onClick={() => { setEmpleadoEdit(emp); setModalAbierto(true); }}>Editar</Btn>
                                             {emp.estado === 'Activo' ? (
-                                                <Btn size="sm" variant="danger" icon="trash" onClick={() => handleBaja(emp.empleado_id)}>Baja</Btn>
+                                                <Btn size="sm" variant="danger" icon="trash" onClick={() => setEmpleadoLiquidar(emp)}>Baja</Btn>
                                             ) : (
                                                 <Btn size="sm" variant="green" icon="refresh" onClick={() => handleReactivar(emp.empleado_id)}>Reactivar</Btn>
                                             )}
@@ -116,6 +183,14 @@ function Directorio() {
                 onSave={cargar}
                 empleadoAEditar={empleadoEdit}
             />
+
+            {empleadoLiquidar && (
+                <ModalLiquidacion
+                    empleado={empleadoLiquidar}
+                    onClose={() => setEmpleadoLiquidar(null)}
+                    onDone={cargar}
+                />
+            )}
         </div>
     );
 }
