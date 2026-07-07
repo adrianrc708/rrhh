@@ -162,9 +162,12 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
 
         # Fase 2: horas de sobretiempo/nocturnas capturadas para el periodo (puente
         # manual; en Fase 3 las rellenará el Kiosco facial).
+        # Fase 5: solo se valorizan si el Gerente ya las aprobó — mientras estén
+        # "Pendiente" la consolidación las trata como si no existieran.
         horas = db.query(HorasPeriodo).filter(
             HorasPeriodo.empleado_id == empleado.empleado_id,
             HorasPeriodo.periodo == periodo,
+            HorasPeriodo.estado == "Aprobado",
             HorasPeriodo.is_deleted.is_(False),
         ).first()
 

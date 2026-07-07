@@ -177,6 +177,11 @@ class HorasPeriodo(Base):
     horas_extra_25 = Column(Numeric(6, 2), nullable=False, default=0)
     horas_extra_35 = Column(Numeric(6, 2), nullable=False, default=0)
     horas_nocturnas = Column(Numeric(6, 2), nullable=False, default=0)
+    # Fase 5: aprobación previa del Gerente. La consolidación solo valoriza
+    # horas en estado "Aprobado"; toda edición de RRHH las vuelve a "Pendiente".
+    estado = Column(String(15), nullable=False, default="Pendiente")
+    aprobado_por = Column(Integer, ForeignKey("usuarios.usuario_id"), nullable=True)
+    fecha_aprobacion = Column(TIMESTAMP, nullable=True)
     registrado_por = Column(Integer, ForeignKey("usuarios.usuario_id"), nullable=True)
     fecha_registro = Column(TIMESTAMP, server_default=func.now())
     is_deleted = Column(Boolean, default=False, nullable=False, index=True)

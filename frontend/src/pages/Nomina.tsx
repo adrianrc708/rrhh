@@ -45,6 +45,8 @@ function ModalNomina({ onClose, onSaved }: { onClose: () => void; onSaved: (id: 
 
 const rolActual = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}').rol; } catch { return undefined; } })();
 const puedeEditarHoras = ['Admin', 'RRHH', 'SuperAdmin'].includes(rolActual);
+// Fase 5: el Gerente no edita horas, pero sí debe verlas para dar su aprobación previa.
+const puedeVerHoras = ['Admin', 'RRHH', 'SuperAdmin', 'Gerente'].includes(rolActual);
 
 export default function Nomina() {
     const toast = useToast();
@@ -97,7 +99,7 @@ export default function Nomina() {
     };
 
     useEffect(() => { if (selId) cargarDetalle(selId); }, [selId]);
-    useEffect(() => { if (selId && tab === 'Horas Extra' && puedeEditarHoras) cargarHoras(selId); }, [selId, tab]);
+    useEffect(() => { if (selId && tab === 'Horas Extra' && puedeVerHoras) cargarHoras(selId); }, [selId, tab]);
 
     const guardarHoras = async (fila: any) => {
         if (!selId) return;
@@ -108,9 +110,21 @@ export default function Nomina() {
                 horas_extra_35: Number(fila.horas_extra_35) || 0,
                 horas_nocturnas: Number(fila.horas_nocturnas) || 0,
             });
-            toast('success', `Horas guardadas para ${fila.nombre}. Vuelve a consolidar para aplicarlas.`);
+            toast('success', `Horas guardadas para ${fila.nombre}. Quedan pendientes de aprobación del Gerente.`);
+            cargarHoras(selId);
         } catch (err: any) {
             toast('error', err?.response?.data?.detail || 'No se pudieron guardar las horas.');
+        }
+    };
+
+    const aprobarHoras = async (empleadoId: number, nombre: string) => {
+        if (!selId) return;
+        try {
+            await api.patch(`/nominas/${selId}/horas/${empleadoId}/aprobar`);
+            toast('success', `Sobretiempo de ${nombre} aprobado. Ya puede consolidarse en la planilla.`);
+            cargarHoras(selId);
+        } catch (err: any) {
+            toast('error', err?.response?.data?.detail || 'No se pudo aprobar el sobretiempo.');
         }
     };
 
@@ -252,7 +266,7 @@ export default function Nomina() {
                     <Tabs
                         tabs={[
                             'Cálculo de Planilla',
-                            ...(puedeEditarHoras ? ['Horas Extra'] : []),
+                            ...(puedeVerHoras ? ['Horas Extra'] : []),
                             `Auditoría Normativa${alertas.length ? ` (${alertas.length})` : ''}`,
                             'Distribución de Boletas',
                             'Historial',
@@ -303,14 +317,16 @@ export default function Nomina() {
                                 </Card>
                             )}
 
-                            {tab === 'Horas Extra' && puedeEditarHoras && (
+                            {tab === 'Horas Extra' && puedeVerHoras && (
                                 <Card>
-                                    <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: colors.textStrong }}>Captura de horas — {nomina?.periodo}</h3>
+                                    <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: colors.textStrong }}>Sobretiempo — {nomina?.periodo}</h3>
                                     <p style={{ margin: '0 0 16px', fontSize: 13, color: colors.textMuted }}>
-                                        Ingresa las horas de sobretiempo y nocturnas. Se valorizan al <strong>consolidar</strong> (25%, 35% y recargo nocturno 35%).
+                                        {puedeEditarHoras
+                                            ? 'Ingresa las horas de sobretiempo y nocturnas. Quedan "Pendiente" hasta que el Gerente las apruebe; solo entonces se valorizan al consolidar (25%, 35% y recargo nocturno 35%).'
+                                            : 'Aprueba el sobretiempo de tu equipo antes de que se pueda consolidar la planilla.'}
                                         {bloqueada && ' La nómina está bloqueada; las horas no son editables.'}
                                     </p>
-                                    {horas.length === 0 ? <Empty text="No hay empleados activos para capturar horas." /> : (
+                                    {horas.length === 0 ? <Empty text="No hay colaboradores para mostrar." /> : (
                                         <div style={{ overflowX: 'auto' }}>
                                             <table style={tableStyles.table}>
                                                 <thead><tr>
@@ -318,6 +334,7 @@ export default function Nomina() {
                                                     <th style={{ ...tableStyles.th, textAlign: 'right' }}>Extra 25%</th>
                                                     <th style={{ ...tableStyles.th, textAlign: 'right' }}>Extra 35%</th>
                                                     <th style={{ ...tableStyles.th, textAlign: 'right' }}>Nocturnas</th>
+                                                    <th style={{ ...tableStyles.th, textAlign: 'center' }}>Estado</th>
                                                     <th style={{ ...tableStyles.th, textAlign: 'center' }}></th>
                                                 </tr></thead>
                                                 <tbody>
@@ -326,13 +343,27 @@ export default function Nomina() {
                                                             <td style={{ ...tableStyles.td, fontWeight: 600, color: colors.textStrong }}>{f.nombre}</td>
                                                             {['horas_extra_25', 'horas_extra_35', 'horas_nocturnas'].map((campo) => (
                                                                 <td key={campo} style={{ ...tableStyles.td, textAlign: 'right' }}>
-                                                                    <input type="number" min="0" step="0.5" disabled={bloqueada}
-                                                                        value={f[campo]} onChange={(e) => setHoraCampo(f.empleado_id, campo, e.target.value)}
-                                                                        style={{ ...inputStyle, width: 90, textAlign: 'right', padding: '6px 8px' }} />
+                                                                    {puedeEditarHoras ? (
+                                                                        <input type="number" min="0" step="0.5" disabled={bloqueada}
+                                                                            value={f[campo]} onChange={(e) => setHoraCampo(f.empleado_id, campo, e.target.value)}
+                                                                            style={{ ...inputStyle, width: 90, textAlign: 'right', padding: '6px 8px' }} />
+                                                                    ) : (
+                                                                        <span>{f[campo]}</span>
+                                                                    )}
                                                                 </td>
                                                             ))}
                                                             <td style={{ ...tableStyles.td, textAlign: 'center' }}>
-                                                                <Btn size="sm" variant="outline" icon="check" disabled={bloqueada} onClick={() => guardarHoras(f)}>Guardar</Btn>
+                                                                <Badge tone={f.estado === 'Aprobado' ? 'green' : 'amber'}>{f.estado}</Badge>
+                                                            </td>
+                                                            <td style={{ ...tableStyles.td, textAlign: 'center' }}>
+                                                                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                                                                    {puedeEditarHoras && (
+                                                                        <Btn size="sm" variant="outline" icon="check" disabled={bloqueada} onClick={() => guardarHoras(f)}>Guardar</Btn>
+                                                                    )}
+                                                                    {f.estado !== 'Aprobado' && (
+                                                                        <Btn size="sm" variant="green" icon="check" disabled={bloqueada} onClick={() => aprobarHoras(f.empleado_id, f.nombre)}>Aprobar</Btn>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}

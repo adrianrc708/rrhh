@@ -4,7 +4,7 @@ from typing import List
 
 from src.database import get_db
 from src.core.models import Usuario, Nomina, DetalleNomina, HistorialAprobacion, AlertaNormativa, HorasPeriodo
-from src.core.dependencies import obtener_usuario_actual, verificar_rol
+from src.core.dependencies import obtener_usuario_actual, verificar_rol, verificar_empleado_en_alcance
 from src.core.services import registrar_auditoria
 from src.hr.models import Empleado
 from src.payroll.schemas import (
@@ -238,18 +238,24 @@ def auditoria_nomina(
 def listar_horas_periodo(
     nomina_id: int,
     db: Session = Depends(get_db),
-    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
 ):
     """
     Lista los empleados activos con sus horas de sobretiempo/nocturnas para el
-    periodo de la nómina (para editarlas antes de consolidar).
+    periodo de la nómina (para editarlas antes de consolidar). El Gerente solo
+    ve su propio alcance jerárquico (no puede editar, solo aprobar).
     """
     nomina = _get_nomina_empresa(nomina_id, usuario_actual.empresa_id, db)
-    empleados = db.query(Empleado).filter(
+    query = db.query(Empleado).filter(
         Empleado.empresa_id == usuario_actual.empresa_id,
         Empleado.estado == "Activo",
         Empleado.is_deleted.is_(False),
-    ).all()
+    )
+    if usuario_actual.rol == "Gerente":
+        from src.core.dependencies import alcance_empleados
+        alcance = alcance_empleados(db, usuario_actual)
+        query = query.filter(Empleado.empleado_id.in_(alcance or {-1}))
+    empleados = query.all()
 
     registros = {
         h.empleado_id: h
@@ -268,6 +274,7 @@ def listar_horas_periodo(
             horas_extra_25=h.horas_extra_25 if h else 0,
             horas_extra_35=h.horas_extra_35 if h else 0,
             horas_nocturnas=h.horas_nocturnas if h else 0,
+            estado=h.estado if h else "Pendiente",
         ))
     return salida
 
@@ -279,7 +286,11 @@ def guardar_horas_periodo(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
 ):
-    """Crea o actualiza (upsert) las horas de un empleado para el periodo de la nómina."""
+    """
+    Crea o actualiza (upsert) las horas de un empleado para el periodo de la
+    nómina. Fase 5: toda edición vuelve el registro a "Pendiente" — el Gerente
+    debe volver a aprobarlas antes de que la consolidación las valorice.
+    """
     nomina = _get_nomina_empresa(nomina_id, usuario_actual.empresa_id, db)
     verificar_nomina_editable(nomina)  # no editar horas si la nómina está bloqueada
 
@@ -310,5 +321,40 @@ def guardar_horas_periodo(
     registro.horas_extra_35 = datos.horas_extra_35
     registro.horas_nocturnas = datos.horas_nocturnas
     registro.registrado_por = usuario_actual.usuario_id
+    registro.estado = "Pendiente"
+    registro.aprobado_por = None
+    registro.fecha_aprobacion = None
     db.commit()
+
+
+@router.patch("/{nomina_id}/horas/{empleado_id}/aprobar", status_code=status.HTTP_200_OK)
+def aprobar_horas_periodo(
+    nomina_id: int,
+    empleado_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
+):
+    """Aprobación previa (Fase 5): sin esto, la consolidación no valoriza el sobretiempo del empleado."""
+    from sqlalchemy import func as sa_func
+    nomina = _get_nomina_empresa(nomina_id, usuario_actual.empresa_id, db)
+    verificar_nomina_editable(nomina)
+    verificar_empleado_en_alcance(db, usuario_actual, empleado_id)
+
+    registro = db.query(HorasPeriodo).filter(
+        HorasPeriodo.empleado_id == empleado_id,
+        HorasPeriodo.periodo == nomina.periodo,
+        HorasPeriodo.is_deleted.is_(False),
+    ).first()
+    if not registro:
+        raise HTTPException(status_code=404, detail="No hay horas registradas para este empleado en el periodo")
+    if registro.estado == "Aprobado":
+        raise HTTPException(status_code=400, detail="Estas horas ya fueron aprobadas")
+
+    registro.estado = "Aprobado"
+    registro.aprobado_por = usuario_actual.usuario_id
+    registro.fecha_aprobacion = sa_func.now()
+    db.commit()
+    registrar_auditoria(db, usuario_actual.usuario_id, "APROBAR_HORAS_EXTRA", "Nómina",
+                        {"nomina_id": nomina_id, "empleado_id": empleado_id, "periodo": nomina.periodo})
+    return {"status": "ok", "empleado_id": empleado_id, "estado": "Aprobado"}
     return {"status": "ok", "empleado_id": datos.empleado_id, "periodo": nomina.periodo}

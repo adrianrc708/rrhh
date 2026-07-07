@@ -99,6 +99,7 @@ class HorasPeriodoItem(BaseModel):
     horas_extra_25: Decimal = Decimal("0")
     horas_extra_35: Decimal = Decimal("0")
     horas_nocturnas: Decimal = Decimal("0")
+    estado: str = "Pendiente"  # Fase 5: Pendiente | Aprobado (aprobación previa del Gerente)
 
 
 class HorasPeriodoUpsert(BaseModel):
