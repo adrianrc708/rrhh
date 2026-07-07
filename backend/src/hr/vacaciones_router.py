@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.core.models import Usuario
-from src.core.dependencies import obtener_usuario_actual, obtener_empleado_actual, verificar_rol, alcance_empleados
+from src.core.dependencies import (
+    obtener_usuario_actual, obtener_empleado_actual, verificar_rol,
+    alcance_empleados, verificar_empleado_en_alcance,
+)
 from src.core.services import registrar_auditoria
 from src.hr.models import Empleado
 from src.hr.vacaciones_models import SolicitudVacaciones
@@ -84,21 +87,6 @@ def _a_response(sol: SolicitudVacaciones, nombre: Optional[str] = None) -> Solic
         motivo_rechazo=sol.motivo_rechazo,
         fecha_solicitud=sol.fecha_solicitud,
     )
-
-
-def _empleado_en_alcance(db: Session, usuario: Usuario, empleado_id: int) -> Empleado:
-    """Verifica que el empleado exista, sea de la empresa, y esté dentro del alcance del usuario."""
-    empleado = db.query(Empleado).filter(
-        Empleado.empleado_id == empleado_id,
-        Empleado.empresa_id == usuario.empresa_id,
-        Empleado.is_deleted.is_(False),
-    ).first()
-    if not empleado:
-        raise HTTPException(status_code=404, detail="Empleado no encontrado en tu empresa")
-    alcance = alcance_empleados(db, usuario)
-    if alcance is not None and empleado_id not in alcance:
-        raise HTTPException(status_code=403, detail="No tienes autorización sobre este colaborador")
-    return empleado
 
 
 # ==========================================================================
@@ -204,7 +192,7 @@ def saldo_de_empleado(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
 ):
-    empleado = _empleado_en_alcance(db, usuario_actual, empleado_id)
+    empleado = verificar_empleado_en_alcance(db, usuario_actual, empleado_id)
     return _calcular_saldo(db, empleado)
 
 
@@ -263,7 +251,7 @@ def aprobar_solicitud(
     ).first()
     if not solicitud:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    empleado = _empleado_en_alcance(db, usuario_actual, solicitud.empleado_id)
+    empleado = verificar_empleado_en_alcance(db, usuario_actual, solicitud.empleado_id)
     if solicitud.estado != "Pendiente":
         raise HTTPException(status_code=400, detail="La solicitud ya fue resuelta")
 
@@ -291,7 +279,7 @@ def rechazar_solicitud(
     ).first()
     if not solicitud:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    empleado = _empleado_en_alcance(db, usuario_actual, solicitud.empleado_id)
+    empleado = verificar_empleado_en_alcance(db, usuario_actual, solicitud.empleado_id)
     if solicitud.estado != "Pendiente":
         raise HTTPException(status_code=400, detail="La solicitud ya fue resuelta")
 

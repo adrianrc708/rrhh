@@ -15,6 +15,7 @@ from src.core.models import Empresa, Usuario, Nomina, Notificacion, EventoAudito
 from src.hr.models import Empleado, Departamento, Cargo, Contrato
 from src.hr.vacaciones_models import SolicitudVacaciones
 from src.hr.liquidacion_models import Liquidacion
+from src.hr.permiso_models import SolicitudPermiso
 # Importamos los otros módulos por si tus compañeros añadieron algo
 from src.attendance.models import *
 from src.attendance.turno_models import Turno, AsignacionTurno

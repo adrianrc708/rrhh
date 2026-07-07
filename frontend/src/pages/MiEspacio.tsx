@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { colors, font, radius } from '../theme';
 import api from '../services/api';
-import { Card, PageHeader, Badge, KpiCard, Loading, Empty, tableStyles, Btn, Field, inputStyle, useToast } from '../components/ui';
+import { Card, PageHeader, Badge, KpiCard, Loading, Empty, tableStyles, Btn, Field, inputStyle, Select, useToast } from '../components/ui';
 
 // ============================================================================
 // Fase 1 — Portal de aterrizaje del rol Empleado (autogestión).
@@ -50,6 +50,24 @@ interface SolicitudVacaciones {
 
 const ESTADO_VAC_TONE: Record<string, any> = { Pendiente: 'amber', Aprobada: 'green', Rechazada: 'red', Cancelada: 'gray' };
 
+interface SolicitudPermiso {
+    solicitud_id: number;
+    tipo: string;
+    fecha: string;
+    horas: number;
+    observaciones: string | null;
+    documento_nombre: string | null;
+    estado: string;
+    motivo_rechazo: string | null;
+}
+
+const TIPOS_PERMISO_AUTOGESTION = [
+    { v: 'Justificada', l: 'Justificada' },
+    { v: 'Permiso_sin_goce', l: 'Permiso sin goce de haber' },
+    { v: 'Permiso_con_goce', l: 'Permiso con goce de haber' },
+    { v: 'Licencia', l: 'Licencia (descanso médico)' },
+];
+
 interface Beneficio {
     id: number;
     tipo: string;
@@ -82,6 +100,51 @@ export default function MiEspacio() {
     const [error, setError] = useState<string | null>(null);
     const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
     const [conceptos, setConceptos] = useState<Concepto[]>([]);
+
+    // Fase 5 — Permisos y descansos médicos (autogestión con documento adjunto)
+    const [misPermisos, setMisPermisos] = useState<SolicitudPermiso[]>([]);
+    const [tipoPermiso, setTipoPermiso] = useState('Justificada');
+    const [fechaPermiso, setFechaPermiso] = useState('');
+    const [horasPermiso, setHorasPermiso] = useState('8');
+    const [obsPermiso, setObsPermiso] = useState('');
+    const [documentoPermiso, setDocumentoPermiso] = useState<File | null>(null);
+    const [solicitandoPermiso, setSolicitandoPermiso] = useState(false);
+
+    const cargarPermisos = async () => {
+        try {
+            const res = await api.get('/permisos/mis-solicitudes');
+            setMisPermisos(res.data);
+        } catch { setMisPermisos([]); }
+    };
+
+    const solicitarPermiso = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSolicitandoPermiso(true);
+        try {
+            const fd = new FormData();
+            fd.append('tipo', tipoPermiso);
+            fd.append('fecha', fechaPermiso);
+            fd.append('horas', horasPermiso);
+            if (obsPermiso) fd.append('observaciones', obsPermiso);
+            if (documentoPermiso) fd.append('documento', documentoPermiso);
+            await api.post('/permisos/solicitar', fd);
+            toast('success', 'Solicitud enviada. Quedará pendiente de aprobación.');
+            setFechaPermiso(''); setObsPermiso(''); setDocumentoPermiso(null);
+            cargarPermisos();
+        } catch (e: any) {
+            toast('error', e?.response?.data?.detail || 'No se pudo enviar la solicitud.');
+        } finally { setSolicitandoPermiso(false); }
+    };
+
+    const cancelarPermiso = async (id: number) => {
+        try {
+            await api.post(`/permisos/solicitudes/${id}/cancelar`);
+            toast('success', 'Solicitud cancelada.');
+            cargarPermisos();
+        } catch (e: any) {
+            toast('error', e?.response?.data?.detail || 'No se pudo cancelar la solicitud.');
+        }
+    };
 
     // Fase 5 — Vacaciones (autogestión)
     const [saldoVac, setSaldoVac] = useState<SaldoVacacional | null>(null);
@@ -144,6 +207,7 @@ export default function MiEspacio() {
                     cargarVacaciones();
                     api.get('/beneficios/mis-beneficios').then((r) => setBeneficios(r.data)).catch(() => setBeneficios([]));
                     api.get('/conceptos/mis-conceptos').then((r) => setConceptos(r.data)).catch(() => setConceptos([]));
+                    cargarPermisos();
                 }
             } catch (e: any) {
                 setError(e?.response?.data?.detail || 'No se pudieron cargar tus datos.');
@@ -298,6 +362,85 @@ export default function MiEspacio() {
                                         <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right' }}>
                                             {s.estado === 'Pendiente' && (
                                                 <Btn size="sm" variant="outline" onClick={() => cancelarSolicitudVac(s.solicitud_id)}>Cancelar</Btn>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </Card>
+            )}
+
+            {/* Permisos y descansos médicos (Fase 5): autogestión con documento adjunto */}
+            {perfil?.empleado_id && (
+                <Card style={{ marginBottom: 28 }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.textStrong }}>Permisos y descansos médicos</h3>
+
+                    <form onSubmit={solicitarPermiso} style={{
+                        display: 'flex', flexDirection: 'column', gap: 14,
+                        marginBottom: 24, padding: 16, background: colors.bg, borderRadius: radius.md,
+                    }}>
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <div style={{ flex: '1 1 220px' }}>
+                                <Field label="Tipo">
+                                    <Select value={tipoPermiso} onChange={setTipoPermiso}>
+                                        {TIPOS_PERMISO_AUTOGESTION.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                                    </Select>
+                                </Field>
+                            </div>
+                            <div style={{ flex: '1 1 150px' }}>
+                                <Field label="Fecha">
+                                    <input type="date" value={fechaPermiso} onChange={(e) => setFechaPermiso(e.target.value)} style={inputStyle} required />
+                                </Field>
+                            </div>
+                            <div style={{ flex: '1 1 100px' }}>
+                                <Field label="Horas">
+                                    <input type="number" min="0" max="24" step="0.5" value={horasPermiso} onChange={(e) => setHorasPermiso(e.target.value)} style={inputStyle} />
+                                </Field>
+                            </div>
+                        </div>
+                        <Field label="Observaciones (opcional)">
+                            <textarea value={obsPermiso} onChange={(e) => setObsPermiso(e.target.value)} style={{ ...inputStyle, minHeight: 56, resize: 'vertical' }} />
+                        </Field>
+                        <Field label="Documento adjunto (opcional — certificado médico, etc.)">
+                            <input
+                                type="file" accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(e) => setDocumentoPermiso(e.target.files?.[0] || null)}
+                                style={{ fontSize: 13, color: colors.textBody }}
+                            />
+                        </Field>
+                        <div>
+                            <Btn type="submit" icon="plus" disabled={solicitandoPermiso}>{solicitandoPermiso ? 'Enviando…' : 'Enviar solicitud'}</Btn>
+                        </div>
+                    </form>
+
+                    {misPermisos.length === 0 ? (
+                        <Empty text="Aún no has solicitado permisos ni descansos médicos." />
+                    ) : (
+                        <table style={tableStyles.table as React.CSSProperties}>
+                            <thead><tr>
+                                <th style={tableStyles.th as React.CSSProperties}>Tipo</th>
+                                <th style={tableStyles.th as React.CSSProperties}>Fecha</th>
+                                <th style={tableStyles.th as React.CSSProperties}>Horas</th>
+                                <th style={tableStyles.th as React.CSSProperties}>Estado</th>
+                                <th style={tableStyles.th as React.CSSProperties}></th>
+                            </tr></thead>
+                            <tbody>
+                                {misPermisos.map((p) => (
+                                    <tr key={p.solicitud_id}>
+                                        <td style={tableStyles.td as React.CSSProperties}>{p.tipo.replace(/_/g, ' ')}</td>
+                                        <td style={tableStyles.td as React.CSSProperties}>{p.fecha}</td>
+                                        <td style={tableStyles.td as React.CSSProperties}>{p.horas}</td>
+                                        <td style={tableStyles.td as React.CSSProperties}>
+                                            <Badge tone={ESTADO_VAC_TONE[p.estado] || 'gray'}>{p.estado}</Badge>
+                                            {p.estado === 'Rechazada' && p.motivo_rechazo && (
+                                                <p style={{ margin: '4px 0 0', fontSize: 11, color: colors.textMuted }}>{p.motivo_rechazo}</p>
+                                            )}
+                                        </td>
+                                        <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right' }}>
+                                            {p.estado === 'Pendiente' && (
+                                                <Btn size="sm" variant="outline" onClick={() => cancelarPermiso(p.solicitud_id)}>Cancelar</Btn>
                                             )}
                                         </td>
                                     </tr>

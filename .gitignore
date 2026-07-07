@@ -15,6 +15,9 @@
 **/dist/
 **/build/
 
+# Documentos subidos en runtime (certificados médicos, etc.)
+backend/uploads/
+
 # Configuración de editores y Sistema Operativo
 .vscode/
 .idea/

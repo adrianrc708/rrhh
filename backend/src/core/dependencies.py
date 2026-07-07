@@ -128,3 +128,24 @@ def alcance_empleados(db: Session, usuario: Usuario) -> Optional[Set[int]]:
 
     # Empleado (y cualquier otro rol no privilegiado): solo él mismo.
     return {empleado.empleado_id}
+
+
+def verificar_empleado_en_alcance(db: Session, usuario: Usuario, empleado_id: int):
+    """
+    Trae el Empleado (de la empresa de `usuario`) y valida que esté dentro de su
+    alcance jerárquico. 404 si no existe/no es de la empresa, 403 si existe pero
+    está fuera del alcance (p. ej. un Gerente intentando ver a alguien que no es
+    su subordinado). Usado por vacaciones, permisos y sobretiempo.
+    """
+    from src.hr.models import Empleado  # import diferido
+    empleado = db.query(Empleado).filter(
+        Empleado.empleado_id == empleado_id,
+        Empleado.empresa_id == usuario.empresa_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if not empleado:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empleado no encontrado en tu empresa")
+    alcance = alcance_empleados(db, usuario)
+    if alcance is not None and empleado_id not in alcance:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes autorización sobre este colaborador")
+    return empleado
