@@ -1,0 +1,23 @@
+# Entornos virtuales y dependencias locales
+**/venv/
+**/node_modules/
+**/.env
+**/.env.local
+
+# Python (Cache y compilados)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+
+# Frontend (Compilados de producción)
+**/dist/
+**/build/
+
+# Configuración de editores y Sistema Operativo
+.vscode/
+.idea/
+.DS_Store
+[Dd]ownloads/
+Thumbs.db
