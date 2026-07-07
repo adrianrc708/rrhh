@@ -3,10 +3,12 @@ from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException, status
 
-from src.core.models import Nomina, DetalleNomina, HistorialAprobacion, Usuario
+from src.core.models import Nomina, DetalleNomina, HistorialAprobacion, Usuario, Empresa, HorasPeriodo
 from src.hr.models import Empleado, Contrato
 from src.attendance.models import Inasistencia, TIPOS_QUE_DESCUENTAN
 from src.payroll.calculations import calcular_planilla_empleado
+from src.core.fiscal import cargar_parametros_fiscales
+from src.payroll.compliance import auditar_prenomina, contar_bloqueos
 
 # RF-13: Máquina de estados
 TRANSICIONES_VALIDAS = {
@@ -63,6 +65,19 @@ def cambiar_estado_nomina(
             detail=f"El rol '{usuario.rol}' no puede realizar la transición '{estado_actual}' → '{nuevo_estado}'.",
         )
 
+    # Fase 2: la auditoría normativa impide aprobar una planilla con bloqueos legales.
+    if nuevo_estado == "Aprobado":
+        alertas = auditar_prenomina(db, nomina)
+        bloqueos = [a for a in alertas if a["nivel"] == "bloqueo"]
+        if bloqueos:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "mensaje": "No se puede aprobar: la auditoría normativa detectó bloqueos legales.",
+                    "bloqueos": bloqueos,
+                },
+            )
+
     db.add(HistorialAprobacion(
         nomina_id=nomina.id,
         usuario_id=usuario.usuario_id,
@@ -91,9 +106,16 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
     """
     verificar_nomina_editable(nomina)
 
+    # Fase 1: parámetros fiscales vigentes (RMV/UIT/tasas) desde la BD.
+    parametros_fiscales = cargar_parametros_fiscales(db)
+    # Fase 2: régimen laboral de la empresa (afecta EsSalud/beneficios).
+    empresa = db.query(Empresa).filter(Empresa.empresa_id == empresa_id).first()
+    regimen = empresa.regimen_laboral if empresa else "General"
+
     empleados = db.query(Empleado).filter(
         Empleado.empresa_id == empresa_id,
         Empleado.estado == "Activo",
+        Empleado.is_deleted.is_(False),
     ).all()
 
     if not empleados:
@@ -118,6 +140,7 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
         contrato = db.query(Contrato).filter(
             Contrato.empleado_id == empleado.empleado_id,
             Contrato.estado == "Vigente",
+            Contrato.is_deleted.is_(False),
         ).first()
 
         if not contrato:
@@ -135,13 +158,27 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
             if i.tipo in TIPOS_QUE_DESCUENTAN
         )
 
-        # RF-11: motor de cálculo
+        # Fase 2: horas de sobretiempo/nocturnas capturadas para el periodo (puente
+        # manual; en Fase 3 las rellenará el Kiosco facial).
+        horas = db.query(HorasPeriodo).filter(
+            HorasPeriodo.empleado_id == empleado.empleado_id,
+            HorasPeriodo.periodo == periodo,
+            HorasPeriodo.is_deleted.is_(False),
+        ).first()
+
+        # RF-11 + Fase 2: motor de cálculo
         resultado = calcular_planilla_empleado(
             sueldo_base=Decimal(str(contrato.sueldo_base)),
             horas_contrato_mes=Decimal(str(contrato.horas_contrato_mes or 160)),
             horas_ausentes_injustificadas=Decimal(str(horas_a_descontar)),
             tipo_pension=empleado.tipo_pension or "ONP",
             porcentaje_afp=Decimal(str(empleado.porcentaje_afp)) if empleado.porcentaje_afp else None,
+            params=parametros_fiscales,
+            perfil_contrato=contrato.perfil_contrato or "Comun",
+            horas_extra_25=Decimal(str(horas.horas_extra_25)) if horas else Decimal("0"),
+            horas_extra_35=Decimal(str(horas.horas_extra_35)) if horas else Decimal("0"),
+            horas_nocturnas=Decimal(str(horas.horas_nocturnas)) if horas else Decimal("0"),
+            regimen=regimen,
         )
 
         db.add(DetalleNomina(
@@ -152,6 +189,11 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
             horas_ausentes=resultado["horas_ausentes"],
             sueldo_base=resultado["sueldo_base"],
             haberes=resultado["haberes"],
+            perfil_contrato=resultado["perfil_contrato"],
+            pago_horas_extra_25=resultado["pago_horas_extra_25"],
+            pago_horas_extra_35=resultado["pago_horas_extra_35"],
+            pago_horas_nocturnas=resultado["pago_horas_nocturnas"],
+            bonos_sector=resultado["bonos_sector"],
             descuento_inasistencias=resultado["descuento_inasistencias"],
             total_ingresos_brutos=resultado["total_ingresos_brutos"],
             tipo_pension=resultado["tipo_pension"],
@@ -173,6 +215,10 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
     nomina.total_neto = total_neto
     db.commit()
 
+    # Fase 2: auditoría normativa sobre los detalles recién consolidados.
+    alertas = auditar_prenomina(db, nomina)
+    bloqueos = sum(1 for a in alertas if a["nivel"] == "bloqueo")
+
     return {
         "nomina_id": nomina.id,
         "periodo": nomina.periodo,
@@ -181,4 +227,6 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
         "total_descuentos": total_descuentos,
         "total_neto": total_neto,
         "total_essalud_empleador": total_essalud,
+        "alertas_normativas": len(alertas),
+        "bloqueos_normativos": bloqueos,
     }

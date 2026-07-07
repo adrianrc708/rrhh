@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Numeric, Date, Boolean
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from src.database import Base
 
 class Departamento(Base):
@@ -9,6 +9,7 @@ class Departamento(Base):
     departamento_id = Column(Integer, primary_key=True, index=True)
     empresa_id = Column(Integer, ForeignKey("empresas.empresa_id", ondelete="CASCADE"))
     nombre = Column(String(100), nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
 
     # Relaciones
     cargos = relationship("Cargo", back_populates="departamento", cascade="all, delete-orphan")
@@ -24,6 +25,7 @@ class Cargo(Base):
     
     # RF-04: Jerarquización de Puestos (Un cargo reporta a otro cargo del departamento)
     parent_id = Column(Integer, ForeignKey("cargos.cargo_id", ondelete="SET NULL"), nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
 
     # Relaciones y soporte autorreferencial para el árbol de puestos
     departamento = relationship("Departamento", back_populates="cargos")
@@ -42,16 +44,28 @@ class Empleado(Base):
     departamento_id = Column(Integer, ForeignKey("departamentos.departamento_id", ondelete="SET NULL"), nullable=True)
     cargo_id = Column(Integer, ForeignKey("cargos.cargo_id", ondelete="SET NULL"), nullable=True)
 
+    # Fase 1: línea de mando por persona (parent_id del empleado). Es la base del
+    # aislamiento jerárquico: un Gerente solo ve su propio subárbol de subordinados.
+    jefe_id = Column(Integer, ForeignKey("empleados.empleado_id", ondelete="SET NULL"), nullable=True, index=True)
+
     tipo_pension = Column(String(10), default="ONP")
     porcentaje_afp = Column(Numeric(5, 4), nullable=True)
-    
+
     fecha_ingreso = Column(Date, nullable=True)
     estado = Column(String(20), default="Activo")
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
 
     departamento_rel = relationship("Departamento", back_populates="empleados")
     cargo_rel = relationship("Cargo", back_populates="empleados")
     contratos = relationship("Contrato", back_populates="empleado")
+
+    # Autorreferencia para el organigrama: subordinados directos / jefe directo.
+    # remote_side va en el lado "jefe" (many-to-one), patrón adjacency-list.
+    subordinados = relationship(
+        "Empleado",
+        backref=backref("jefe", remote_side=[empleado_id]),
+    )
 
 
 class Contrato(Base):
@@ -60,12 +74,15 @@ class Contrato(Base):
     contrato_id = Column(Integer, primary_key=True, index=True)
     empleado_id = Column(Integer, ForeignKey("empleados.empleado_id", ondelete="CASCADE"))
     tipo_contrato = Column(String(50), nullable=False)
-    
+    # Fase 2: perfil sectorial que condiciona mínimos, bonos inamovibles y auditoría.
+    perfil_contrato = Column(String(20), default="Comun", nullable=False)
+
     sueldo_base = Column(Numeric(10, 2), nullable=False)
     horas_contrato_mes = Column(Numeric(6, 2), default=160)
     fecha_inicio = Column(Date, nullable=False)
     fecha_fin = Column(Date, nullable=True)
     estado = Column(String(20), default="Vigente")
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
 
     empleado = relationship("Empleado", back_populates="contratos")

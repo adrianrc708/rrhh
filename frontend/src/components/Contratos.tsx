@@ -12,6 +12,7 @@ export default function Contratos() {
     // Form states
     const [empleadoId, setEmpleadoId] = useState('');
     const [tipoContrato, setTipoContrato] = useState('Plazo Fijo (Temporal)');
+    const [perfil, setPerfil] = useState('Comun');   // Fase 2: perfil sectorial
     const [sueldoBase, setSueldoBase] = useState('1025');
     const [horasMes, setHorasMes] = useState('160');
     const [fechaInicio, setFechaInicio] = useState('');
@@ -47,6 +48,7 @@ export default function Contratos() {
             await api.post('/empleados/contratos', {
                 empleado_id: Number(empleadoId),
                 tipo_contrato: tipoContrato,
+                perfil_contrato: perfil,
                 sueldo_base: Number(sueldoBase),
                 horas_contrato_mes: Number(horasMes),
                 fecha_inicio: fechaInicio,
@@ -104,6 +106,16 @@ export default function Contratos() {
                                 </Select>
                             </Field>
 
+                            <Field label="Perfil / régimen sectorial">
+                                <Select value={perfil} onChange={setPerfil}>
+                                    <option value="Comun">Común</option>
+                                    <option value="Minero">Minero</option>
+                                    <option value="Agrario">Agrario</option>
+                                    <option value="Construccion">Construcción</option>
+                                    <option value="PartTime">Part-Time (proporcional)</option>
+                                </Select>
+                            </Field>
+
                             <div style={{ display: 'flex', gap: 10 }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <Field label="Sueldo base (S/.)">
@@ -139,7 +151,8 @@ export default function Contratos() {
                                         <tr>
                                             <th style={tableStyles.th}>ID</th>
                                             <th style={tableStyles.th}>Colaborador</th>
-                                            <th style={tableStyles.th}>Régimen</th>
+                                            <th style={tableStyles.th}>Tipo</th>
+                                            <th style={tableStyles.th}>Perfil</th>
                                             <th style={tableStyles.th}>Sueldo base</th>
                                             <th style={tableStyles.th}>Vigencia</th>
                                             <th style={{ ...tableStyles.th, textAlign: 'center' }}>Estado</th>
@@ -151,6 +164,9 @@ export default function Contratos() {
                                                 <td style={{ ...tableStyles.td, fontWeight: 700, color: colors.textStrong }}>{con.contrato_id}</td>
                                                 <td style={{ ...tableStyles.td, fontWeight: 600, color: colors.textStrong }}>{obtenerNombreEmpleado(con.empleado_id)}</td>
                                                 <td style={tableStyles.td}>{con.tipo_contrato}</td>
+                                                <td style={tableStyles.td}>
+                                                    <Badge tone={con.perfil_contrato && con.perfil_contrato !== 'Comun' ? 'amber' : 'gray'}>{con.perfil_contrato || 'Comun'}</Badge>
+                                                </td>
                                                 <td style={{ ...tableStyles.td, color: colors.green, fontWeight: 700 }}>S/. {con.sueldo_base}</td>
                                                 <td style={{ ...tableStyles.td, color: colors.textMuted }}>{con.fecha_inicio} al {con.fecha_fin || 'Indefinido'}</td>
                                                 <td style={{ ...tableStyles.td, textAlign: 'center' }}>

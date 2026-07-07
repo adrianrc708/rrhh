@@ -41,6 +41,7 @@ class EmpleadoBase(BaseModel):
     nombre: Optional[str] = None
     departamento_id: Optional[int] = None
     cargo_id: Optional[int] = None
+    jefe_id: Optional[int] = None  # Fase 1: línea de mando (aislamiento jerárquico)
     tipo_pension: str = Field(default="ONP", description="AFP o ONP")
     porcentaje_afp: Optional[Decimal] = Field(None, ge=0, le=1)
     fecha_ingreso: Optional[date] = None
@@ -52,6 +53,7 @@ class EmpleadoUpdate(BaseModel):
     departamento_id: Optional[int] = None
     nombre: Optional[str] = None
     cargo_id: Optional[int] = None
+    jefe_id: Optional[int] = None
     tipo_pension: Optional[str] = None
     porcentaje_afp: Optional[Decimal] = Field(None, ge=0, le=1)
     fecha_ingreso: Optional[date] = None
@@ -72,6 +74,7 @@ class EmpleadoResponse(EmpleadoBase):
 class ContratoBase(BaseModel):
     empleado_id: int
     tipo_contrato: str
+    perfil_contrato: str = Field(default="Comun", description="Comun | Minero | Agrario | Construccion | PartTime")
     sueldo_base: Decimal = Field(gt=0)
     horas_contrato_mes: Decimal = Field(default=Decimal("160"), ge=1)
     fecha_inicio: date

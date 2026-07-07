@@ -44,6 +44,70 @@ def crear_notificacion(db: Session, empresa_id: int, titulo: str, mensaje: str, 
     db.refresh(notif)
     return notif
 
+UMBRALES_ALERTA = [30, 15, 5]  # días antes del evento (Fase 4)
+
+
+def _notificar_admins(db: Session, empresa_id: int, titulo: str, mensaje: str) -> int:
+    admins = db.query(Usuario).filter(
+        Usuario.empresa_id == empresa_id,
+        Usuario.rol.in_(["Admin", "RRHH", "Administrador"]),
+        Usuario.estado == "Activo",
+        Usuario.is_deleted.is_(False),
+    ).all()
+    for admin in admins:
+        crear_notificacion(db, empresa_id, titulo, mensaje, admin.usuario_id)
+    return len(admins)
+
+
+def generar_alertas_proactivas(db: Session) -> int:
+    """
+    Fase 4 — Motor de alertas proactivas. Evalúa a diario y notifica a 30/15/5 días:
+      - Vencimiento de contrato (Contrato.fecha_fin).
+      - Fin del periodo de prueba (Contrato.fecha_inicio + 3 meses).
+    El match por día exacto evita duplicados entre ejecuciones diarias.
+    (Los descansos médicos prolongados se engancharán en la Fase 5, cuando exista
+    la fecha de fin de licencia.)
+    """
+    hoy = date.today()
+    creadas = 0
+
+    contratos = db.query(Contrato).join(
+        Empleado, Contrato.empleado_id == Empleado.empleado_id
+    ).filter(
+        Contrato.estado == "Vigente",
+        Contrato.is_deleted.is_(False),
+        Empleado.estado == "Activo",
+        Empleado.is_deleted.is_(False),
+    ).all()
+
+    for contrato in contratos:
+        emp = db.query(Empleado).filter(Empleado.empleado_id == contrato.empleado_id).first()
+        if not emp:
+            continue
+        u = db.query(Usuario).filter(Usuario.usuario_id == emp.usuario_id).first()
+        nombre = emp.nombre or (u.nombre if u else f"ID {emp.empleado_id}")
+
+        # 1) Vencimiento de contrato
+        if contrato.fecha_fin:
+            dias = (contrato.fecha_fin - hoy).days
+            if dias in UMBRALES_ALERTA:
+                crear_notificacion(db, emp.empresa_id, "Tu contrato está por vencer",
+                                   f"Tu contrato vence en {dias} días ({contrato.fecha_fin}). Acércate a RRHH.", emp.usuario_id)
+                creadas += 1
+                creadas += _notificar_admins(db, emp.empresa_id, "Alerta: contrato por vencer",
+                                             f"El contrato de {nombre} vence en {dias} días ({contrato.fecha_fin}).")
+
+        # 2) Fin del periodo de prueba (3 meses desde el inicio)
+        if contrato.fecha_inicio:
+            fin_prueba = contrato.fecha_inicio + timedelta(days=90)
+            dias_p = (fin_prueba - hoy).days
+            if dias_p in UMBRALES_ALERTA:
+                creadas += _notificar_admins(db, emp.empresa_id, "Fin de periodo de prueba",
+                                             f"El periodo de prueba de {nombre} termina en {dias_p} días ({fin_prueba}).")
+
+    return creadas
+
+
 def verificar_vencimiento_contratos(db: Session):
     # Buscar contratos vigentes cuya fecha de fin es exactamente en 7 días
     fecha_limite = date.today() + timedelta(days=7)

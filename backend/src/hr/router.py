@@ -4,7 +4,10 @@ from typing import List
 
 from src.database import get_db
 from src.core.models import Usuario
-from src.core.dependencies import obtener_usuario_actual, verificar_rol
+from src.core.dependencies import (
+    obtener_usuario_actual, verificar_rol,
+    alcance_empleados, obtener_ids_subordinados,   # ← Fase 1: aislamiento jerárquico
+)
 from src.core.services import registrar_auditoria          # ← NUEVO
 from src.hr.models import Departamento, Cargo, Empleado, Contrato
 from src.hr.schemas import (
@@ -40,7 +43,10 @@ def listar_departamentos(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"]))
 ):
-    return db.query(Departamento).filter(Departamento.empresa_id == usuario_actual.empresa_id).all()
+    return db.query(Departamento).filter(
+        Departamento.empresa_id == usuario_actual.empresa_id,
+        Departamento.is_deleted.is_(False),
+    ).all()
 
 @router.post("/cargos", response_model=CargoResponse, status_code=status.HTTP_201_CREATED)
 def crear_cargo(
@@ -48,6 +54,15 @@ def crear_cargo(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"]))
 ):
+    # Seguridad multi-tenant: el departamento debe pertenecer a la empresa del usuario.
+    dept = db.query(Departamento).filter(
+        Departamento.departamento_id == datos.departamento_id,
+        Departamento.empresa_id == usuario_actual.empresa_id,
+        Departamento.is_deleted.is_(False),
+    ).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail="Departamento no encontrado en tu empresa")
+
     cargo = Cargo(**datos.model_dump())
     db.add(cargo)
     db.commit()
@@ -63,13 +78,18 @@ def eliminar_departamento(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"]))
 ):
-    dept = db.query(Departamento).filter(Departamento.departamento_id == departamento_id).first()
+    dept = db.query(Departamento).filter(
+        Departamento.departamento_id == departamento_id,
+        Departamento.empresa_id == usuario_actual.empresa_id,
+        Departamento.is_deleted.is_(False),
+    ).first()
     if not dept:
         raise HTTPException(status_code=404, detail="Departamento no encontrado")
 
     registrar_auditoria(db, usuario_actual.usuario_id, "ELIMINAR_DEPARTAMENTO", "HR",
                         {"departamento_id": departamento_id, "nombre": dept.nombre})
-    db.delete(dept)
+    # Fase 1: borrado lógico (no se destruyen cargos/empleados en cascada).
+    dept.is_deleted = True
     db.commit()
     return None
 
@@ -78,7 +98,11 @@ def listar_cargos(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"]))
 ):
-    return db.query(Cargo).join(Departamento).filter(Departamento.empresa_id == usuario_actual.empresa_id).all()
+    return db.query(Cargo).join(Departamento).filter(
+        Departamento.empresa_id == usuario_actual.empresa_id,
+        Cargo.is_deleted.is_(False),
+        Departamento.is_deleted.is_(False),
+    ).all()
 
 # ==========================================
 # RF-05: DIRECTORIO DE EMPLEADOS
@@ -90,8 +114,21 @@ def crear_empleado(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"]))
 ):
-    if db.query(Empleado).filter(Empleado.usuario_id == datos.usuario_id).first():
+    if db.query(Empleado).filter(
+        Empleado.usuario_id == datos.usuario_id,
+        Empleado.is_deleted.is_(False),
+    ).first():
         raise HTTPException(status_code=409, detail="El usuario ya tiene un perfil de empleado")
+
+    # Seguridad multi-tenant: el jefe asignado debe pertenecer a la misma empresa.
+    if datos.jefe_id is not None:
+        jefe = db.query(Empleado).filter(
+            Empleado.empleado_id == datos.jefe_id,
+            Empleado.empresa_id == usuario_actual.empresa_id,
+            Empleado.is_deleted.is_(False),
+        ).first()
+        if not jefe:
+            raise HTTPException(status_code=404, detail="El jefe asignado no existe en tu empresa")
 
     empleado = Empleado(**datos.model_dump(), empresa_id=usuario_actual.empresa_id)
     db.add(empleado)
@@ -108,7 +145,15 @@ def listar_empleados(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"]))
 ):
-    return db.query(Empleado).filter(Empleado.empresa_id == usuario_actual.empresa_id).all()
+    query = db.query(Empleado).filter(
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+    )
+    # Fase 1: el Gerente solo ve su propio subárbol; Admin/RRHH ven toda la empresa.
+    alcance = alcance_empleados(db, usuario_actual)
+    if alcance is not None:
+        query = query.filter(Empleado.empleado_id.in_(alcance or {-1}))
+    return query.all()
 
 @router.patch("/{empleado_id}", response_model=EmpleadoResponse)
 def actualizar_empleado(
@@ -119,17 +164,34 @@ def actualizar_empleado(
 ):
     empleado = db.query(Empleado).filter(
         Empleado.empleado_id == empleado_id,
-        Empleado.empresa_id == usuario_actual.empresa_id
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
     ).first()
 
     if not empleado:
         raise HTTPException(status_code=404, detail="Empleado no encontrado")
 
+    # Validar reasignación de jefe: debe ser de la misma empresa y no generar ciclo.
+    if "jefe_id" in datos.model_dump(exclude_unset=True) and datos.jefe_id is not None:
+        if datos.jefe_id == empleado_id:
+            raise HTTPException(status_code=400, detail="Un empleado no puede ser su propio jefe")
+        jefe = db.query(Empleado).filter(
+            Empleado.empleado_id == datos.jefe_id,
+            Empleado.empresa_id == usuario_actual.empresa_id,
+            Empleado.is_deleted.is_(False),
+        ).first()
+        if not jefe:
+            raise HTTPException(status_code=404, detail="El jefe asignado no existe en tu empresa")
+        # Evitar ciclos: el nuevo jefe no puede estar dentro del subárbol del empleado.
+        if datos.jefe_id in obtener_ids_subordinados(db, empleado_id, incluir_self=True):
+            raise HTTPException(status_code=400, detail="Asignación inválida: generaría un ciclo jerárquico")
+
     # CASO A: BAJA LOGICA
     if datos.estado == "Inactivo" and empleado.estado != "Inactivo":
         contratos_activos = db.query(Contrato).filter(
             Contrato.empleado_id == empleado_id,
-            Contrato.estado == "Vigente"
+            Contrato.estado == "Vigente",
+            Contrato.is_deleted.is_(False),
         ).all()
         for contrato in contratos_activos:
             contrato.estado = "Vencido"
@@ -137,7 +199,8 @@ def actualizar_empleado(
     # CASO B: REACTIVACIÓN
     elif datos.estado == "Activo" and empleado.estado == "Inactivo":
         ultimo_contrato = db.query(Contrato).filter(
-            Contrato.empleado_id == empleado_id
+            Contrato.empleado_id == empleado_id,
+            Contrato.is_deleted.is_(False),
         ).order_by(Contrato.fecha_creacion.desc()).first()
         if ultimo_contrato:
             ultimo_contrato.estado = "Vigente"
@@ -163,7 +226,8 @@ def desactivar_empleado(
 ):
     empleado = db.query(Empleado).filter(
         Empleado.empleado_id == empleado_id,
-        Empleado.empresa_id == usuario_actual.empresa_id
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
     ).first()
 
     if not empleado:
@@ -172,7 +236,8 @@ def desactivar_empleado(
     if empleado.estado != "Inactivo":
         contratos_activos = db.query(Contrato).filter(
             Contrato.empleado_id == empleado_id,
-            Contrato.estado == "Vigente"
+            Contrato.estado == "Vigente",
+            Contrato.is_deleted.is_(False),
         ).all()
         for contrato in contratos_activos:
             contrato.estado = "Vencido"
@@ -190,9 +255,13 @@ def listar_usuarios_sin_empleado(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(obtener_usuario_actual)
 ):
-    usuarios_libres = db.query(Usuario).outerjoin(Empleado, Usuario.usuario_id == Empleado.usuario_id)\
+    usuarios_libres = db.query(Usuario).outerjoin(
+            Empleado,
+            (Usuario.usuario_id == Empleado.usuario_id) & (Empleado.is_deleted.is_(False)),
+        )\
         .filter(
             Usuario.empresa_id == usuario_actual.empresa_id,
+            Usuario.is_deleted.is_(False),
             Empleado.empleado_id == None
         ).all()
 
@@ -211,9 +280,23 @@ def crear_contrato(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"]))
 ):
+    from src.core.fiscal import PERFILES_CONTRATO
+    if datos.perfil_contrato not in PERFILES_CONTRATO:
+        raise HTTPException(status_code=400, detail=f"Perfil de contrato inválido. Opciones: {', '.join(PERFILES_CONTRATO)}")
+
+    # Seguridad multi-tenant: el empleado del contrato debe ser de la misma empresa.
+    empleado = db.query(Empleado).filter(
+        Empleado.empleado_id == datos.empleado_id,
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado en tu empresa")
+
     contratos_viejos = db.query(Contrato).filter(
         Contrato.empleado_id == datos.empleado_id,
-        Contrato.estado == "Vigente"
+        Contrato.estado == "Vigente",
+        Contrato.is_deleted.is_(False),
     ).all()
     for c in contratos_viejos:
         c.estado = "Vencido"
@@ -233,7 +316,17 @@ def listar_todos_los_contratos(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"]))
 ):
-    return db.query(Contrato).order_by(Contrato.fecha_creacion.desc()).all()
+    # ANTES: devolvía TODOS los contratos de TODAS las empresas (fuga multi-tenant).
+    # Ahora se acota a la empresa del usuario y al alcance jerárquico de su rol.
+    query = db.query(Contrato).join(Empleado, Contrato.empleado_id == Empleado.empleado_id).filter(
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+        Contrato.is_deleted.is_(False),
+    )
+    alcance = alcance_empleados(db, usuario_actual)
+    if alcance is not None:
+        query = query.filter(Contrato.empleado_id.in_(alcance or {-1}))
+    return query.order_by(Contrato.fecha_creacion.desc()).all()
 
 @router.get("/contratos/{empleado_id}", response_model=List[ContratoResponse])
 def listar_contratos(
@@ -241,13 +334,36 @@ def listar_contratos(
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente", "Empleado"]))
 ):
-    return db.query(Contrato).filter(Contrato.empleado_id == empleado_id).order_by(Contrato.fecha_inicio.desc()).all()
+    # Cierre de IDOR: el empleado objetivo debe existir en la empresa del usuario
+    # y estar dentro de su alcance (un Empleado solo ve lo suyo; un Gerente su equipo).
+    empleado = db.query(Empleado).filter(
+        Empleado.empleado_id == empleado_id,
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+
+    alcance = alcance_empleados(db, usuario_actual)
+    if alcance is not None and empleado_id not in alcance:
+        raise HTTPException(status_code=403, detail="No tienes acceso a los contratos de este empleado")
+
+    return db.query(Contrato).filter(
+        Contrato.empleado_id == empleado_id,
+        Contrato.is_deleted.is_(False),
+    ).order_by(Contrato.fecha_inicio.desc()).all()
 
 @router.get("/mantenimiento/limpiar-contratos-viejos")
-def limpiar_contratos_retroactivos(db: Session = Depends(get_db)):
+def limpiar_contratos_retroactivos(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin"])),
+):
+    # ANTES: endpoint sin autenticación. Ahora solo Admin/SuperAdmin y acotado a la empresa.
     contratos_huerfanos = db.query(Contrato).join(Empleado).filter(
         Contrato.estado == "Vigente",
-        Empleado.estado == "Inactivo"
+        Contrato.is_deleted.is_(False),
+        Empleado.estado == "Inactivo",
+        Empleado.empresa_id == usuario_actual.empresa_id,
     ).all()
     contador = len(contratos_huerfanos)
     for contrato in contratos_huerfanos:

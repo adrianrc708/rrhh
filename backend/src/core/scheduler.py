@@ -4,7 +4,7 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 from src.database import SessionLocal
 from src.core.models import Nomina, HistorialAprobacion
-from src.core.services import verificar_vencimiento_contratos
+from src.core.services import generar_alertas_proactivas
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,17 +49,18 @@ def extraccion_nocturna_datos():
     # Aquí iría la lógica de consulta a BD y exportación (ej: CSV, envío a S3 o BI)
     logger.info("Extracción de datos simulada con éxito.")
 
-def cronjob_verificar_contratos():
+def cronjob_alertas_proactivas():
     """
-    Cronjob extra: Verifica los contratos todos los días y lanza notificaciones.
+    Cronjob (Fase 4): motor de alertas proactivas 30/15/5 días (contratos y
+    fin de periodo de prueba). Inyecta notificaciones en los dashboards.
     """
-    logger.info("Verificando vencimientos de contratos...")
+    logger.info("Ejecutando motor de alertas proactivas...")
     db: Session = SessionLocal()
     try:
-        creadas = verificar_vencimiento_contratos(db)
-        logger.info(f"Verificación completa. {creadas} notificaciones creadas.")
+        creadas = generar_alertas_proactivas(db)
+        logger.info(f"Alertas proactivas: {creadas} notificaciones creadas.")
     except Exception as e:
-        logger.error(f"Error al verificar contratos: {e}")
+        logger.error(f"Error en alertas proactivas: {e}")
     finally:
         db.close()
 
@@ -86,11 +87,11 @@ def start_scheduler():
         replace_existing=True
     )
     
-    # Ejecutar la verificación de contratos todos los días a las 08:00 AM
+    # Ejecutar el motor de alertas proactivas todos los días a las 08:00 AM
     scheduler.add_job(
-        cronjob_verificar_contratos,
+        cronjob_alertas_proactivas,
         trigger=CronTrigger(hour=8, minute=0),
-        id="verificar_contratos",
+        id="alertas_proactivas",
         replace_existing=True
     )
     

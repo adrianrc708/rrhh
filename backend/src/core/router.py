@@ -12,7 +12,7 @@ from src.core.security import verificar_password, crear_token_acceso, obtener_pa
 from src.core.dependencies import obtener_usuario_actual, verificar_rol
 from src.core.schemas import UsuarioCreate, UsuarioResponse, RegistroEmpresaCreate, NotificacionResponse
 from src.core.models import Empresa, Notificacion, EventoAuditoria, Pago
-from src.core.services import verificar_vencimiento_contratos
+from src.core.services import generar_alertas_proactivas
 
 router = APIRouter()
 
@@ -26,7 +26,10 @@ PRECIOS_PLAN = {"Micro": 12, "Estándar": 10, "Corporativo": 8}
 
 @router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.correo == form_data.username).first()
+    usuario = db.query(Usuario).filter(
+        Usuario.correo == form_data.username,
+        Usuario.is_deleted.is_(False),
+    ).first()
     if not usuario or not verificar_password(form_data.password, usuario.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -41,13 +44,25 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 
 @router.get("/usuarios/me")
-def perfil_usuario(usuario_actual: Usuario = Depends(obtener_usuario_actual)):
+def perfil_usuario(
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    # Fase 1: adjuntar el perfil de Empleado (si existe) para que el frontend pueda
+    # enrutar por rol y para el cierre de IDOR (el Empleado conoce su propio id).
+    from src.hr.models import Empleado
+    empleado = db.query(Empleado).filter(
+        Empleado.usuario_id == usuario_actual.usuario_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
     return {
         "usuario_id": usuario_actual.usuario_id,
         "nombre": usuario_actual.nombre,
         "correo": usuario_actual.correo,
         "rol": usuario_actual.rol,
         "empresa_id": usuario_actual.empresa_id,
+        "empleado_id": empleado.empleado_id if empleado else None,
+        "jefe_id": empleado.jefe_id if empleado else None,
     }
 
 
@@ -121,13 +136,17 @@ def listar_notificaciones(
     usuario_actual: Usuario = Depends(obtener_usuario_actual)
 ):
     notifs = db.query(Notificacion).filter(
-        Notificacion.usuario_id == usuario_actual.usuario_id
+        Notificacion.usuario_id == usuario_actual.usuario_id,
+        Notificacion.is_deleted.is_(False),
     ).order_by(Notificacion.fecha_creacion.desc()).all()
     return notifs
 
 @router.post("/notificaciones/verificar-contratos")
-def trigger_verificar_contratos(db: Session = Depends(get_db)):
-    creadas = verificar_vencimiento_contratos(db)
+def trigger_alertas_proactivas(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin"])),  # antes: sin auth
+):
+    creadas = generar_alertas_proactivas(db)
     return {"status": "ok", "notificaciones_creadas": creadas}
 
 
@@ -174,7 +193,10 @@ def listar_usuarios(
     usuario_actual: Usuario = Depends(verificar_rol(["Admin"])),
 ):
     """Listado de todos los usuarios de la empresa (solo Admin)."""
-    return db.query(Usuario).filter(Usuario.empresa_id == usuario_actual.empresa_id).all()
+    return db.query(Usuario).filter(
+        Usuario.empresa_id == usuario_actual.empresa_id,
+        Usuario.is_deleted.is_(False),
+    ).all()
 
 
 @router.post("/usuarios", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)

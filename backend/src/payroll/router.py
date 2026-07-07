@@ -3,13 +3,14 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from src.database import get_db
-from src.core.models import Usuario, Nomina, DetalleNomina, HistorialAprobacion
+from src.core.models import Usuario, Nomina, DetalleNomina, HistorialAprobacion, AlertaNormativa, HorasPeriodo
 from src.core.dependencies import obtener_usuario_actual, verificar_rol
 from src.core.services import registrar_auditoria
 from src.hr.models import Empleado
 from src.payroll.schemas import (
     NominaCreate, NominaResponse, CambiarEstadoRequest,
     BoletaEmpleado, ResumenConsolidacion, EntradaHistorial,
+    HorasPeriodoItem, HorasPeriodoUpsert, AlertaNormativaResponse,
 )
 from src.payroll.services import cambiar_estado_nomina, consolidar_nomina, verificar_nomina_editable
 
@@ -46,6 +47,11 @@ def _construir_boleta(detalle: DetalleNomina, nomina: Nomina, db: Session) -> Bo
         horas_ausentes=detalle.horas_ausentes,
         sueldo_base=detalle.sueldo_base,
         haberes=detalle.haberes,
+        perfil_contrato=detalle.perfil_contrato,
+        pago_horas_extra_25=detalle.pago_horas_extra_25,
+        pago_horas_extra_35=detalle.pago_horas_extra_35,
+        pago_horas_nocturnas=detalle.pago_horas_nocturnas,
+        bonos_sector=detalle.bonos_sector,
         descuento_inasistencias=detalle.descuento_inasistencias,
         total_ingresos_brutos=detalle.total_ingresos_brutos,
         tipo_pension=detalle.tipo_pension,
@@ -205,3 +211,103 @@ def historial_aprobacion(
             comentarios=h.comentarios,
         ))
     return resultado
+
+
+# ── Fase 2: Auditoría normativa ───────────────────────────────────────────────
+
+@router.get("/{nomina_id}/auditoria", response_model=List[AlertaNormativaResponse])
+def auditoria_nomina(
+    nomina_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
+):
+    """Hallazgos de la auditoría normativa (bloqueos y advertencias) de la nómina."""
+    _get_nomina_empresa(nomina_id, usuario_actual.empresa_id, db)
+    return (
+        db.query(AlertaNormativa)
+        .filter(AlertaNormativa.nomina_id == nomina_id)
+        .order_by(AlertaNormativa.nivel.asc(), AlertaNormativa.id.asc())
+        .all()
+    )
+
+
+# ── Fase 2: Captura manual de horas de segmentación ───────────────────────────
+
+@router.get("/{nomina_id}/horas", response_model=List[HorasPeriodoItem])
+def listar_horas_periodo(
+    nomina_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    """
+    Lista los empleados activos con sus horas de sobretiempo/nocturnas para el
+    periodo de la nómina (para editarlas antes de consolidar).
+    """
+    nomina = _get_nomina_empresa(nomina_id, usuario_actual.empresa_id, db)
+    empleados = db.query(Empleado).filter(
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.estado == "Activo",
+        Empleado.is_deleted.is_(False),
+    ).all()
+
+    registros = {
+        h.empleado_id: h
+        for h in db.query(HorasPeriodo).filter(
+            HorasPeriodo.periodo == nomina.periodo,
+            HorasPeriodo.is_deleted.is_(False),
+        ).all()
+    }
+
+    salida: List[HorasPeriodoItem] = []
+    for emp in empleados:
+        h = registros.get(emp.empleado_id)
+        salida.append(HorasPeriodoItem(
+            empleado_id=emp.empleado_id,
+            nombre=emp.nombre or f"Empleado {emp.empleado_id}",
+            horas_extra_25=h.horas_extra_25 if h else 0,
+            horas_extra_35=h.horas_extra_35 if h else 0,
+            horas_nocturnas=h.horas_nocturnas if h else 0,
+        ))
+    return salida
+
+
+@router.post("/{nomina_id}/horas", status_code=status.HTTP_200_OK)
+def guardar_horas_periodo(
+    nomina_id: int,
+    datos: HorasPeriodoUpsert,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    """Crea o actualiza (upsert) las horas de un empleado para el periodo de la nómina."""
+    nomina = _get_nomina_empresa(nomina_id, usuario_actual.empresa_id, db)
+    verificar_nomina_editable(nomina)  # no editar horas si la nómina está bloqueada
+
+    empleado = db.query(Empleado).filter(
+        Empleado.empleado_id == datos.empleado_id,
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado en tu empresa")
+
+    registro = db.query(HorasPeriodo).filter(
+        HorasPeriodo.empleado_id == datos.empleado_id,
+        HorasPeriodo.periodo == nomina.periodo,
+        HorasPeriodo.is_deleted.is_(False),
+    ).first()
+
+    if registro is None:
+        registro = HorasPeriodo(
+            empresa_id=usuario_actual.empresa_id,
+            empleado_id=datos.empleado_id,
+            periodo=nomina.periodo,
+            registrado_por=usuario_actual.usuario_id,
+        )
+        db.add(registro)
+
+    registro.horas_extra_25 = datos.horas_extra_25
+    registro.horas_extra_35 = datos.horas_extra_35
+    registro.horas_nocturnas = datos.horas_nocturnas
+    registro.registrado_por = usuario_actual.usuario_id
+    db.commit()
+    return {"status": "ok", "empleado_id": datos.empleado_id, "periodo": nomina.periodo}

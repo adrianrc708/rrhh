@@ -3,19 +3,13 @@ import { colors, radius, font, shadow } from '../theme';
 import Icon from './Icons';
 import { OmniaLogo } from './OmniaLogo';
 import api from '../services/api';
+import { SectionKey, NavMeta, seccionesPorRol } from '../auth/roles';
+import CopilotoLauncher from './CopilotoLauncher';
 
-export type SectionKey = 'dashboard' | 'personal' | 'asistencia' | 'nomina' | 'auditoria' | 'admin';
+// SectionKey se re-exporta para compatibilidad con importadores previos.
+export type { SectionKey };
 
-const NAV: { key: SectionKey; label: string; sub: string; icon: string; adminOnly?: boolean }[] = [
-    { key: 'admin', label: 'Super Admin', sub: 'Gestión global', icon: 'shield', adminOnly: true },
-    { key: 'dashboard', label: 'Dashboard', sub: 'Analítica predictiva de IA', icon: 'dashboard' },
-    { key: 'personal', label: 'Personal', sub: 'Directorio y estructura', icon: 'users' },
-    { key: 'asistencia', label: 'Asistencia', sub: 'Gestión de registros biométricos', icon: 'clock' },
-    { key: 'nomina', label: 'Nómina', sub: 'Cálculos automatizados', icon: 'dollar' },
-    { key: 'auditoria', label: 'Auditoría', sub: 'Reportes de cumplimiento', icon: 'shield' },
-];
-
-function NavItem({ item, active, onClick }: { item: typeof NAV[number]; active: boolean; onClick: () => void }) {
+function NavItem({ item, active, onClick }: { item: NavMeta; active: boolean; onClick: () => void }) {
     return (
         <button
             onClick={onClick}
@@ -107,11 +101,9 @@ export default function Layout({
                     </div>
                     
                     <nav style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {NAV.filter(i => {
-                            if (user.rol === 'SuperAdmin') return i.key !== 'dashboard';
-                            return !i.adminOnly;
-                        }).map((item) => (
-                            <NavItem key={item.key} item={item as any} active={active === item.key} onClick={() => onNavigate(item.key)} />
+                        {/* Fase 1: el menú se deriva del rol (única fuente de verdad en auth/roles). */}
+                        {seccionesPorRol(user.rol).map((item) => (
+                            <NavItem key={item.key} item={item} active={active === item.key} onClick={() => onNavigate(item.key)} />
                         ))}
                     </nav>
                 </div>
@@ -152,6 +144,9 @@ export default function Layout({
                     {children}
                 </div>
             </main>
+
+            {/* Fase 4: copiloto de IA flotante (solo roles de gestión) */}
+            <CopilotoLauncher rol={user.rol} />
         </div>
     );
 }

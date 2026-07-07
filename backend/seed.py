@@ -1,9 +1,11 @@
 from src.database import engine, Base, SessionLocal
 # Importamos todos los modelos relacionales para el mapeo correcto
-from src.core.models import Empresa, Usuario, Nomina, DetalleNomina, HistorialAprobacion, EventoAuditoria
+from src.core.models import Empresa, Usuario, Nomina, DetalleNomina, HistorialAprobacion, EventoAuditoria, ParametroFiscal
 from src.hr.models import Empleado, Departamento, Cargo, Contrato
-from src.attendance.models import Inasistencia
+from src.attendance.models import Inasistencia, DispositivoKiosco
 from src.core.security import obtener_password_hash
+from src.core.fiscal import PARAMETROS_DEFAULT, DESCRIPCIONES
+from src.attendance import biometrics
 from datetime import date
 
 from sqlalchemy import text
@@ -69,6 +71,7 @@ if not db.query(Empresa).first():
     db.refresh(cargo_operario)
 
     # 5. Crear perfiles de empleado mapeados y sus contratos históricos para TODOS los usuarios (RF-05 y RF-06)
+    empleados_por_rol = {}  # Fase 1: para cablear la línea de mando (jefe_id) luego
     for u in usuarios:
         if u.rol == "SuperAdmin":
             continue # El SuperAdmin no es un empleado de la empresa
@@ -108,6 +111,7 @@ if not db.query(Empresa).first():
         db.add(emp)
         db.commit()
         db.refresh(emp)
+        empleados_por_rol[u.rol] = emp
 
         # Contrato asociado obligatorio
         contrato = Contrato(
@@ -120,6 +124,19 @@ if not db.query(Empresa).first():
         )
         db.add(contrato)
 
+    db.commit()
+
+    # 5.b Cablear la línea de mando (Fase 1): Admin (tope) → RRHH/Gerente → Empleado.
+    #     Con esto, el Gerente solo verá el subárbol bajo él (Maria Empleada).
+    admin_emp = empleados_por_rol.get("Admin")
+    gerente_emp = empleados_por_rol.get("Gerente")
+    if admin_emp:
+        if empleados_por_rol.get("RRHH"):
+            empleados_por_rol["RRHH"].jefe_id = admin_emp.empleado_id
+        if gerente_emp:
+            gerente_emp.jefe_id = admin_emp.empleado_id
+    if gerente_emp and empleados_por_rol.get("Empleado"):
+        empleados_por_rol["Empleado"].jefe_id = gerente_emp.empleado_id
     db.commit()
 
     print("¡Estructura relacional de Recursos Humanos poblada con éxito!")
@@ -146,5 +163,35 @@ else:
             print("¡Super Admin actualizado a rol SuperAdmin!")
     else:
         print("No se insertó nada extra.")
+
+# ── Seeds idempotentes (se ejecutan tanto en BD nueva como existente) ──────────
+empresa = db.query(Empresa).first()
+if empresa:
+    # Parámetros fiscales por defecto (RMV/UIT/tasas + sectoriales), vigentes desde 2024.
+    if not db.query(ParametroFiscal).first():
+        for clave, valor in PARAMETROS_DEFAULT.items():
+            db.add(ParametroFiscal(
+                clave=clave,
+                valor=valor,
+                descripcion=DESCRIPCIONES.get(clave),
+                vigencia_desde=date(2024, 1, 1),
+                vigencia_hasta=None,
+                activo=True,
+            ))
+        db.commit()
+        print("Parámetros fiscales por defecto insertados (RMV, UIT, tasas, sectoriales).")
+
+    # Dispositivo kiosco demo (Fase 3) con token/PIN conocidos para pruebas.
+    if not db.query(DispositivoKiosco).first():
+        dispositivo = DispositivoKiosco(
+            empresa_id=empresa.empresa_id,
+            nombre="Tablet Demo (Puerta Principal)",
+            token_hash=biometrics.hash_secreto("demo"),
+            pin_hash=biometrics.hash_secreto("1234"),
+        )
+        db.add(dispositivo)
+        db.commit()
+        db.refresh(dispositivo)
+        print(f"Kiosco demo listo → Token: {dispositivo.dispositivo_id}.demo  |  PIN: 1234")
 
 db.close()

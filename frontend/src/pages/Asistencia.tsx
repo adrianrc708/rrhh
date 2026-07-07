@@ -6,6 +6,9 @@ import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, Progress, 
 import TurnosTab from '../components/TurnosTab';
 import PermisosTab from '../components/PermisosTab';
 import AIPanelTab from '../components/AIPanelTab';
+import KioscoAdminTab from '../components/KioscoAdminTab';
+import ConciliacionTab from '../components/ConciliacionTab';
+import JornadasTab from '../components/JornadasTab';
 
 const TIPOS = ['Injustificada', 'Justificada', 'Permiso_sin_goce', 'Permiso_con_goce', 'Licencia'];
 const TIPO_TONE: Record<string, any> = {
@@ -192,7 +195,7 @@ export default function Asistencia() {
                 <KpiCard icon="check" label="Sin Descuento" value={empleadoSel ? String(inasistencias.filter((i) => !i.descuenta_sueldo).length) : '—'} sub="Justificadas / con goce" badge="OK" badgeTone="green" />
             </div>
 
-            <Tabs tabs={['Registro de Inasistencias', 'Analítica de Inasistencias', 'Gestión de Turnos', 'Permisos y Justificaciones', 'Panel de IA']} active={tab} onChange={setTab} />
+            <Tabs tabs={['Registro de Inasistencias', 'Kiosco Facial', 'Conciliación y Cierre', 'Jornadas Atípicas', 'Analítica de Inasistencias', 'Gestión de Turnos', 'Permisos y Justificaciones', 'Panel de IA']} active={tab} onChange={setTab} />
 
             {tab === 'Registro de Inasistencias' && (
                 <Card>
@@ -301,6 +304,9 @@ export default function Asistencia() {
                 )
             )}
 
+            {tab === 'Kiosco Facial' && <KioscoAdminTab empleados={empleados} />}
+            {tab === 'Conciliación y Cierre' && <ConciliacionTab />}
+            {tab === 'Jornadas Atípicas' && <JornadasTab empleados={empleados} />}
             {tab === 'Gestión de Turnos' && <TurnosTab empleados={empleados} />}
             {tab === 'Permisos y Justificaciones' && <PermisosTab empleados={empleados} inasistencias={inasistencias} refrescar={refrescar} />}
             {tab === 'Panel de IA' && <AIPanelTab 

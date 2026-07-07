@@ -3,6 +3,7 @@ import { colors, radius, font, shadow } from '../theme';
 import api from '../services/api';
 import Icon from '../components/Icons';
 import { Card, Btn, Badge, KpiCard, useToast, inputStyle } from '../components/ui';
+import ParametrosFiscales from '../components/ParametrosFiscales';
 
 interface UsuarioAdmin {
     usuario_id: number;
@@ -18,6 +19,7 @@ interface EmpresaAdmin {
     ruc: string;
     plan_suscripcion: string;
     estado: string;
+    regimen_laboral: string;
     fecha_registro: string;
     usuarios: UsuarioAdmin[];
 }
@@ -39,6 +41,8 @@ export default function Admin() {
     // View state
     const [selectedEmpresa, setSelectedEmpresa] = useState<EmpresaAdmin | null>(null);
     const [tab, setTab] = useState<'Datos' | 'Usuarios'>('Datos');
+    // Fase 1: vista global del panel (empresas vs. parámetros fiscales del SaaS).
+    const [vista, setVista] = useState<'empresas' | 'parametros'>('empresas');
     
     // Modals
     const [showUserModal, setShowUserModal] = useState(false);
@@ -171,6 +175,10 @@ export default function Admin() {
                                 <label style={{ display: 'block', fontSize: 13, color: colors.textMuted, marginBottom: 4 }}>Plan de Suscripción</label>
                                 <div style={{ fontSize: 15, fontWeight: 600 }}>{selectedEmpresa.plan_suscripcion}</div>
                             </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 13, color: colors.textMuted, marginBottom: 4 }}>Régimen laboral</label>
+                                <div style={{ fontSize: 15, fontWeight: 600 }}>{selectedEmpresa.regimen_laboral || 'General'}</div>
+                            </div>
                             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                                 <Btn variant="outline" icon="edit" onClick={() => { setFormData(selectedEmpresa); setShowEmpresaModal(true); }}>Editar Empresa</Btn>
                                 <Btn variant="danger" icon="trash" onClick={() => eliminarEmpresa(selectedEmpresa.empresa_id)}>Eliminar Empresa</Btn>
@@ -262,6 +270,13 @@ export default function Admin() {
                                         <option value="Suspendida">Suspendida</option>
                                     </select>
                                 </div>
+                                <div><label style={{ fontSize: 13 }}>Régimen laboral</label>
+                                    <select style={inputStyle} value={formData.regimen_laboral || 'General'} onChange={e => setFormData({...formData, regimen_laboral: e.target.value})}>
+                                        <option value="General">Régimen General</option>
+                                        <option value="MYPE_Pequena">MYPE Pequeña</option>
+                                        <option value="MYPE_Micro">MYPE Micro</option>
+                                    </select>
+                                </div>
                                 <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                                     <Btn type="button" variant="outline" onClick={() => setShowEmpresaModal(false)}>Cancelar</Btn>
                                     <Btn type="submit" variant="indigo">Guardar</Btn>
@@ -277,16 +292,32 @@ export default function Admin() {
     // LIST VIEW
     return (
         <div style={{ fontFamily: font }}>
-            <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <h1 style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 800, color: colors.textStrong }}>Panel de Super Admin</h1>
                     <p style={{ margin: 0, fontSize: 15, color: colors.textMuted }}>Monitorización y gestión global del SaaS.</p>
                 </div>
-                <Btn variant="indigo" icon="plus" onClick={() => { setFormData({ estado: 'Activa', plan_suscripcion: 'Micro' }); setShowEmpresaModal(true); }}>Nueva Empresa</Btn>
+                {vista === 'empresas' && (
+                    <Btn variant="indigo" icon="plus" onClick={() => { setFormData({ estado: 'Activa', plan_suscripcion: 'Micro', regimen_laboral: 'General' }); setShowEmpresaModal(true); }}>Nueva Empresa</Btn>
+                )}
             </div>
 
+            {/* Conmutador de vista global */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 28 }}>
+                <button onClick={() => setVista('empresas')}
+                    style={{ padding: '8px 16px', background: vista === 'empresas' ? colors.indigo : 'transparent', color: vista === 'empresas' ? '#fff' : colors.textBody, border: `1px solid ${vista === 'empresas' ? colors.indigo : colors.border}`, borderRadius: radius.md, cursor: 'pointer', fontWeight: 600, fontFamily: font }}>
+                    Empresas
+                </button>
+                <button onClick={() => setVista('parametros')}
+                    style={{ padding: '8px 16px', background: vista === 'parametros' ? colors.indigo : 'transparent', color: vista === 'parametros' ? '#fff' : colors.textBody, border: `1px solid ${vista === 'parametros' ? colors.indigo : colors.border}`, borderRadius: radius.md, cursor: 'pointer', fontWeight: 600, fontFamily: font }}>
+                    Parámetros Fiscales
+                </button>
+            </div>
+
+            {vista === 'parametros' && <ParametrosFiscales />}
+
             {/* KPIs */}
-            {stats && (
+            {vista === 'empresas' && stats && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
                     <KpiCard label="Total Empresas" value={stats.total_empresas.toString()} icon="building" />
                     <KpiCard label="Empresas Activas" value={stats.empresas_activas.toString()} icon="check" />
@@ -295,6 +326,7 @@ export default function Admin() {
                 </div>
             )}
 
+            {vista === 'empresas' && (
             <Card style={{ padding: 0, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                     <thead>
@@ -337,6 +369,7 @@ export default function Admin() {
                     </tbody>
                 </table>
             </Card>
+            )}
 
             {/* EMPRESA MODAL (CREATE) */}
             {showEmpresaModal && (

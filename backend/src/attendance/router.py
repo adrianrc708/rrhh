@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime
 import os
+import json
 from openai import OpenAI
 import google.generativeai as genai
 
@@ -15,14 +17,27 @@ class AIInsightsRequest(BaseModel):
     empleado_id: Optional[int] = None
 
 from src.database import get_db
-from src.core.models import Usuario
-from src.core.dependencies import verificar_rol
+from src.core.models import Usuario, HorasPeriodo
+from src.core.dependencies import (
+    verificar_rol, obtener_usuario_actual, obtener_empleado_actual, alcance_empleados,
+)
 from src.core.services import registrar_auditoria          # ← NUEVO
-from src.attendance.models import Inasistencia, TIPOS_QUE_DESCUENTAN
-from src.attendance.schemas import InasistenciaCreate, InasistenciaResponse
+from src.attendance.models import (
+    Inasistencia, TIPOS_QUE_DESCUENTAN,
+    DispositivoKiosco, RostroEmpleado, Marcacion, CicloJornada, CierreAsistencia,
+)
+from src.attendance.schemas import (
+    InasistenciaCreate, InasistenciaResponse,
+    DispositivoCreate, DispositivoResponse, DispositivoCreado,
+    RostroCreate, RostroResponse, MarcarRemoto, MarcacionResponse,
+    CicloJornadaCreate, CicloJornadaResponse, ConciliacionItem, CierreResponse,
+)
 from src.hr.models import Empleado
 from src.attendance.zkteco_sync import sincronizar_zkteco
-from src.core.dependencies import obtener_usuario_actual
+from src.attendance import biometrics
+from src.attendance.marcaje import registrar_marcacion
+from src.attendance.segmentation import conciliar_periodo
+from src.ai import llm
 
 router = APIRouter()
 
@@ -181,60 +196,326 @@ def ai_insights(
     Responde en Markdown. Sé conciso, profesional y mantén un tono constante.
     """
     
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    openai_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
-    
-    if not gemini_key and not openai_key:
-        return {"analysis": "La API key de IA no está configurada en el backend."}
-        
+    # Fase 4: usa el proveedor LLM compartido (src/ai/llm.py).
+    analysis = llm.responder(
+        system_prompt,
+        [{"role": m.role, "content": m.content} for m in request.messages],
+        prompt_inicial="Genera el análisis general de inasistencias.",
+    )
+    registrar_auditoria(
+        db,
+        usuario_actual.usuario_id,
+        "GENERAR_AI_INSIGHTS",
+        "Asistencia",
+        {"registros_analizados": len(inasistencias)},
+    )
+    return {"analysis": analysis}
+
+
+# ============================================================================
+# Fase 3 — Dispositivos kiosco (Admin/RRHH)
+# ============================================================================
+
+@router.post("/dispositivos", response_model=DispositivoCreado, status_code=status.HTTP_201_CREATED)
+def crear_dispositivo(
+    datos: DispositivoCreate,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    """Registra una tablet kiosco. Devuelve el token UNA sola vez (no se puede recuperar)."""
+    secreto = biometrics.generar_secreto_dispositivo()
+    dispositivo = DispositivoKiosco(
+        empresa_id=usuario_actual.empresa_id,
+        nombre=datos.nombre,
+        token_hash=biometrics.hash_secreto(secreto),
+        pin_hash=biometrics.hash_secreto(datos.pin),
+    )
+    db.add(dispositivo)
+    db.commit()
+    db.refresh(dispositivo)
+
+    registrar_auditoria(db, usuario_actual.usuario_id, "CREAR_DISPOSITIVO_KIOSCO", "Asistencia",
+                        {"dispositivo_id": dispositivo.dispositivo_id, "nombre": dispositivo.nombre})
+
+    token = biometrics.construir_token(dispositivo.dispositivo_id, secreto)
+    return DispositivoCreado(
+        dispositivo_id=dispositivo.dispositivo_id, nombre=dispositivo.nombre,
+        activo=dispositivo.activo, ultimo_uso=dispositivo.ultimo_uso,
+        fecha_creacion=dispositivo.fecha_creacion, token=token,
+    )
+
+
+@router.get("/dispositivos", response_model=List[DispositivoResponse])
+def listar_dispositivos(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    return db.query(DispositivoKiosco).filter(
+        DispositivoKiosco.empresa_id == usuario_actual.empresa_id,
+        DispositivoKiosco.is_deleted.is_(False),
+    ).order_by(DispositivoKiosco.dispositivo_id.desc()).all()
+
+
+@router.delete("/dispositivos/{dispositivo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_dispositivo(
+    dispositivo_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    dispositivo = db.query(DispositivoKiosco).filter(
+        DispositivoKiosco.dispositivo_id == dispositivo_id,
+        DispositivoKiosco.empresa_id == usuario_actual.empresa_id,
+        DispositivoKiosco.is_deleted.is_(False),
+    ).first()
+    if not dispositivo:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+    dispositivo.is_deleted = True
+    dispositivo.activo = False
+    db.commit()
+
+
+# ============================================================================
+# Fase 3 — Enrolamiento facial (Admin/RRHH)
+# ============================================================================
+
+@router.post("/rostros", response_model=RostroResponse, status_code=status.HTTP_201_CREATED)
+def enrolar_rostro(
+    datos: RostroCreate,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    empleado = db.query(Empleado).filter(
+        Empleado.empleado_id == datos.empleado_id,
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado en tu empresa")
+
     try:
-        if gemini_key:
-            genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel(
-                model_name='gemini-2.5-flash',
-                system_instruction=system_prompt,
-                generation_config={"temperature": 0.2}
+        descriptor = biometrics.validar_descriptor(datos.descriptor)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    rostro = RostroEmpleado(
+        empresa_id=usuario_actual.empresa_id,
+        empleado_id=datos.empleado_id,
+        descriptor=json.dumps(descriptor),
+        etiqueta=datos.etiqueta,
+    )
+    db.add(rostro)
+    db.commit()
+    db.refresh(rostro)
+    registrar_auditoria(db, usuario_actual.usuario_id, "ENROLAR_ROSTRO", "Asistencia",
+                        {"empleado_id": datos.empleado_id, "rostro_id": rostro.id})
+    return rostro
+
+
+@router.get("/rostros/empleado/{empleado_id}", response_model=List[RostroResponse])
+def listar_rostros(
+    empleado_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    return db.query(RostroEmpleado).filter(
+        RostroEmpleado.empleado_id == empleado_id,
+        RostroEmpleado.empresa_id == usuario_actual.empresa_id,
+        RostroEmpleado.is_deleted.is_(False),
+    ).all()
+
+
+@router.delete("/rostros/{rostro_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_rostro(
+    rostro_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    rostro = db.query(RostroEmpleado).filter(
+        RostroEmpleado.id == rostro_id,
+        RostroEmpleado.empresa_id == usuario_actual.empresa_id,
+        RostroEmpleado.is_deleted.is_(False),
+    ).first()
+    if not rostro:
+        raise HTTPException(status_code=404, detail="Rostro no encontrado")
+    rostro.is_deleted = True
+    rostro.activo = False
+    db.commit()
+
+
+# ============================================================================
+# Fase 3 — Marcación remota (Empleado autenticado) y consulta de marcaciones
+# ============================================================================
+
+@router.post("/marcar-remoto", response_model=MarcacionResponse)
+def marcar_remoto(
+    datos: MarcarRemoto,
+    request: Request,
+    db: Session = Depends(get_db),
+    empleado: Empleado = Depends(obtener_empleado_actual),
+):
+    """Marcación para teletrabajo/campo: captura GPS e IP de origen."""
+    ip = request.client.host if request.client else None
+    marcacion = registrar_marcacion(
+        db, empresa_id=empleado.empresa_id, empleado_id=empleado.empleado_id,
+        origen="remoto", lat=datos.lat, lng=datos.lng, ip=ip,
+    )
+    return marcacion
+
+
+@router.get("/marcaciones", response_model=List[MarcacionResponse])
+def listar_marcaciones(
+    empleado_id: Optional[int] = None,
+    periodo: Optional[str] = None,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
+):
+    """Marcaciones acotadas al alcance del rol (Empleado solo las suyas)."""
+    query = db.query(Marcacion).filter(
+        Marcacion.empresa_id == usuario_actual.empresa_id,
+        Marcacion.is_deleted.is_(False),
+    )
+    alcance = alcance_empleados(db, usuario_actual)
+    if alcance is not None:
+        query = query.filter(Marcacion.empleado_id.in_(alcance or {-1}))
+    if empleado_id is not None:
+        if alcance is not None and empleado_id not in alcance:
+            raise HTTPException(status_code=403, detail="No tienes acceso a esas marcaciones")
+        query = query.filter(Marcacion.empleado_id == empleado_id)
+    if periodo:
+        query = query.filter(Marcacion.periodo == periodo)
+    return query.order_by(Marcacion.momento.desc()).limit(500).all()
+
+
+# ============================================================================
+# Fase 3 — Jornadas atípicas (Admin/RRHH)
+# ============================================================================
+
+@router.post("/ciclos", response_model=CicloJornadaResponse, status_code=status.HTTP_201_CREATED)
+def crear_ciclo(
+    datos: CicloJornadaCreate,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    empleado = db.query(Empleado).filter(
+        Empleado.empleado_id == datos.empleado_id,
+        Empleado.empresa_id == usuario_actual.empresa_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if not empleado:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado en tu empresa")
+
+    # Solo un ciclo activo por empleado: desactivar los previos.
+    db.query(CicloJornada).filter(
+        CicloJornada.empleado_id == datos.empleado_id,
+        CicloJornada.activo.is_(True),
+        CicloJornada.is_deleted.is_(False),
+    ).update({CicloJornada.activo: False}, synchronize_session=False)
+
+    ciclo = CicloJornada(**datos.model_dump(), empresa_id=usuario_actual.empresa_id)
+    db.add(ciclo)
+    db.commit()
+    db.refresh(ciclo)
+    return ciclo
+
+
+@router.get("/ciclos", response_model=List[CicloJornadaResponse])
+def listar_ciclos(
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH", "Gerente"])),
+):
+    return db.query(CicloJornada).filter(
+        CicloJornada.empresa_id == usuario_actual.empresa_id,
+        CicloJornada.activo.is_(True),
+        CicloJornada.is_deleted.is_(False),
+    ).all()
+
+
+@router.delete("/ciclos/{ciclo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_ciclo(
+    ciclo_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    ciclo = db.query(CicloJornada).filter(
+        CicloJornada.ciclo_id == ciclo_id,
+        CicloJornada.empresa_id == usuario_actual.empresa_id,
+        CicloJornada.is_deleted.is_(False),
+    ).first()
+    if not ciclo:
+        raise HTTPException(status_code=404, detail="Ciclo no encontrado")
+    ciclo.is_deleted = True
+    ciclo.activo = False
+    db.commit()
+
+
+# ============================================================================
+# Fase 3 — Conciliación y cierre mensual (Admin/RRHH)
+# ============================================================================
+
+@router.get("/conciliacion")
+def previsualizar_conciliacion(
+    periodo: str,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    """Segmentación calculada desde marcaciones para el periodo (sin persistir)."""
+    items = conciliar_periodo(db, usuario_actual.empresa_id, periodo)
+    cierre = db.query(CierreAsistencia).filter(
+        CierreAsistencia.empresa_id == usuario_actual.empresa_id,
+        CierreAsistencia.periodo == periodo,
+    ).first()
+    return {
+        "periodo": periodo,
+        "estado": cierre.estado if cierre else "Abierto",
+        "items": items,
+    }
+
+
+@router.post("/conciliacion/congelar", response_model=CierreResponse)
+def congelar_conciliacion(
+    periodo: str,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(verificar_rol(["Admin", "RRHH"])),
+):
+    """
+    Congela la asistencia del periodo: inyecta las horas segmentadas en HorasPeriodo
+    (Fase 2) para que la nómina las consuma, y marca el cierre como 'Congelado'.
+    """
+    items = conciliar_periodo(db, usuario_actual.empresa_id, periodo)
+
+    afectados = 0
+    for it in items:
+        registro = db.query(HorasPeriodo).filter(
+            HorasPeriodo.empleado_id == it["empleado_id"],
+            HorasPeriodo.periodo == periodo,
+            HorasPeriodo.is_deleted.is_(False),
+        ).first()
+        if registro is None:
+            registro = HorasPeriodo(
+                empresa_id=usuario_actual.empresa_id,
+                empleado_id=it["empleado_id"],
+                periodo=periodo,
+                registrado_por=usuario_actual.usuario_id,
             )
-            
-            history = []
-            for m in request.messages:
-                history.append({"role": "model" if m.role == "assistant" else "user", "parts": [m.content]})
-                
-            if not history:
-                response = model.generate_content("Genera el análisis general de inasistencias.")
-            else:
-                chat = model.start_chat(history=history[:-1])
-                response = chat.send_message(history[-1]["parts"][0])
-                
-            analysis = response.text
-        else:
-            base_url = "https://api.groq.com/openai/v1" if os.getenv("GROQ_API_KEY") else None
-            model = "llama3-8b-8192" if os.getenv("GROQ_API_KEY") else "gpt-3.5-turbo"
-            client = OpenAI(api_key=openai_key, base_url=base_url)
-            
-            openai_msgs = [{"role": "system", "content": system_prompt}]
-            for m in request.messages:
-                openai_msgs.append({"role": m.role, "content": m.content})
-                
-            if not request.messages:
-                openai_msgs.append({"role": "user", "content": "Genera el análisis general de inasistencias."})
-                
-            response = client.chat.completions.create(
-                model=model,
-                messages=openai_msgs,
-                temperature=0.2
-            )
-            analysis = response.choices[0].message.content
-        
-        registrar_auditoria(
-            db,
-            usuario_actual.usuario_id,
-            "GENERAR_AI_INSIGHTS",
-            "Asistencia",
-            {"registros_analizados": len(inasistencias)},
-        )
-        
-        return {"analysis": analysis}
-    except Exception as e:
-        print(f"Error AI: {e}")
-        return {"analysis": f"Ocurrió un error al generar el análisis: {str(e)}"}
+            db.add(registro)
+        registro.horas_extra_25 = it["horas_extra_25"]
+        registro.horas_extra_35 = it["horas_extra_35"]
+        registro.horas_nocturnas = it["horas_nocturnas"]
+        registro.registrado_por = usuario_actual.usuario_id
+        afectados += 1
+
+    cierre = db.query(CierreAsistencia).filter(
+        CierreAsistencia.empresa_id == usuario_actual.empresa_id,
+        CierreAsistencia.periodo == periodo,
+    ).first()
+    if cierre is None:
+        cierre = CierreAsistencia(empresa_id=usuario_actual.empresa_id, periodo=periodo)
+        db.add(cierre)
+    cierre.estado = "Congelado"
+    cierre.cerrado_por = usuario_actual.usuario_id
+    cierre.fecha_cierre = datetime.now()
+
+    db.commit()
+    registrar_auditoria(db, usuario_actual.usuario_id, "CONGELAR_ASISTENCIA", "Asistencia",
+                        {"periodo": periodo, "empleados_afectados": afectados})
+    return CierreResponse(periodo=periodo, estado="Congelado", empleados_afectados=afectados)

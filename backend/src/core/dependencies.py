@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
+from typing import Optional, Set
 from src.database import get_db
 from src.core.models import Usuario
 from src.core.security import SECRET_KEY, ALGORITHM
@@ -45,7 +46,7 @@ def verificar_rol(roles_permitidos: list[str]):
         # SuperAdmin en Modo Monitor tiene acceso a todas las rutas
         if usuario_actual.rol == "SuperAdmin":
             return usuario_actual
-            
+
         if usuario_actual.rol not in roles_permitidos:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -53,3 +54,77 @@ def verificar_rol(roles_permitidos: list[str]):
             )
         return usuario_actual
     return role_checker
+
+
+# ==========================================================================
+# Fase 1: aislamiento jerárquico y resolución del empleado autenticado.
+# ==========================================================================
+
+def obtener_empleado_actual(
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    """
+    Resuelve el perfil de Empleado ligado al usuario autenticado.
+    Se usa para el rol Empleado (autogestión / cierre de IDOR). Lanza 404 si el
+    usuario no tiene perfil de empleado (p. ej. un Admin sin ficha de trabajador).
+    """
+    from src.hr.models import Empleado  # import diferido: evita ciclo de módulos
+    empleado = db.query(Empleado).filter(
+        Empleado.usuario_id == usuario_actual.usuario_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if empleado is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El usuario autenticado no tiene un perfil de empleado asociado.",
+        )
+    return empleado
+
+
+def obtener_ids_subordinados(db: Session, empleado_id: int, incluir_self: bool = True) -> Set[int]:
+    """
+    Devuelve el subárbol completo de subordinados (directos + indirectos) de un
+    empleado, recorriendo `jefe_id` por niveles. Base del aislamiento del Gerente.
+    """
+    from src.hr.models import Empleado  # import diferido
+    resultado: Set[int] = {empleado_id} if incluir_self else set()
+    frontera = {empleado_id}
+    while frontera:
+        hijos = db.query(Empleado.empleado_id).filter(
+            Empleado.jefe_id.in_(frontera),
+            Empleado.is_deleted.is_(False),
+        ).all()
+        nuevos = {h[0] for h in hijos} - resultado
+        if not nuevos:
+            break
+        resultado |= nuevos
+        frontera = nuevos
+    return resultado
+
+
+def alcance_empleados(db: Session, usuario: Usuario) -> Optional[Set[int]]:
+    """
+    Conjunto de empleado_id que el usuario puede ver, según su rol:
+      - Admin / RRHH / SuperAdmin -> None (sin restricción: toda su empresa).
+      - Gerente -> su propio subárbol de subordinados (su "área de control").
+      - Empleado -> únicamente su propio empleado_id.
+    Devolver None significa "no filtrar por empleado, solo por empresa".
+    """
+    from src.hr.models import Empleado  # import diferido
+    if usuario.rol in ("Admin", "RRHH", "SuperAdmin"):
+        return None
+
+    empleado = db.query(Empleado).filter(
+        Empleado.usuario_id == usuario.usuario_id,
+        Empleado.is_deleted.is_(False),
+    ).first()
+    if empleado is None:
+        # Sin ficha de empleado no puede ver a nadie (fail-closed).
+        return set()
+
+    if usuario.rol == "Gerente":
+        return obtener_ids_subordinados(db, empleado.empleado_id, incluir_self=True)
+
+    # Empleado (y cualquier otro rol no privilegiado): solo él mismo.
+    return {empleado.empleado_id}
