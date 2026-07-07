@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { colors, font } from '../theme';
+import { colors, font, radius } from '../theme';
 import api from '../services/api';
-import { Card, PageHeader, Badge, KpiCard, Loading, Empty, tableStyles, Btn, useToast } from '../components/ui';
+import { Card, PageHeader, Badge, KpiCard, Loading, Empty, tableStyles, Btn, Field, inputStyle, useToast } from '../components/ui';
 
 // ============================================================================
 // Fase 1 — Portal de aterrizaje del rol Empleado (autogestión).
@@ -33,6 +33,23 @@ interface Contrato {
     estado: string;
 }
 
+interface SaldoVacacional {
+    dias_devengados: number;
+    dias_comprometidos: number;
+    dias_disponibles: number;
+}
+
+interface SolicitudVacaciones {
+    solicitud_id: number;
+    fecha_inicio: string;
+    fecha_fin: string;
+    dias_solicitados: number;
+    estado: string;
+    motivo_rechazo: string | null;
+}
+
+const ESTADO_VAC_TONE: Record<string, any> = { Pendiente: 'amber', Aprobada: 'green', Rechazada: 'red', Cancelada: 'gray' };
+
 const soles = (n: number | string) =>
     'S/ ' + Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -44,6 +61,47 @@ export default function MiEspacio() {
     const [marcando, setMarcando] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Fase 5 — Vacaciones (autogestión)
+    const [saldoVac, setSaldoVac] = useState<SaldoVacacional | null>(null);
+    const [misSolicitudes, setMisSolicitudes] = useState<SolicitudVacaciones[]>([]);
+    const [fechaInicioVac, setFechaInicioVac] = useState('');
+    const [fechaFinVac, setFechaFinVac] = useState('');
+    const [solicitandoVac, setSolicitandoVac] = useState(false);
+
+    const cargarVacaciones = async () => {
+        try {
+            const [resSaldo, resSolicitudes] = await Promise.all([
+                api.get('/vacaciones/mi-saldo'),
+                api.get('/vacaciones/mis-solicitudes'),
+            ]);
+            setSaldoVac(resSaldo.data);
+            setMisSolicitudes(resSolicitudes.data);
+        } catch { /* el empleado puede no tener ficha aún; se ignora en silencio */ }
+    };
+
+    const solicitarVacaciones = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSolicitandoVac(true);
+        try {
+            await api.post('/vacaciones/solicitar', { fecha_inicio: fechaInicioVac, fecha_fin: fechaFinVac });
+            toast('success', 'Solicitud de vacaciones enviada. Quedará pendiente de aprobación.');
+            setFechaInicioVac(''); setFechaFinVac('');
+            cargarVacaciones();
+        } catch (e: any) {
+            toast('error', e?.response?.data?.detail || 'No se pudo enviar la solicitud.');
+        } finally { setSolicitandoVac(false); }
+    };
+
+    const cancelarSolicitudVac = async (id: number) => {
+        try {
+            await api.post(`/vacaciones/solicitudes/${id}/cancelar`);
+            toast('success', 'Solicitud cancelada.');
+            cargarVacaciones();
+        } catch (e: any) {
+            toast('error', e?.response?.data?.detail || 'No se pudo cancelar la solicitud.');
+        }
+    };
 
     const cargarMarcaciones = async (empleadoId: number) => {
         try {
@@ -62,6 +120,7 @@ export default function MiEspacio() {
                     const res = await api.get(`/empleados/contratos/${p.empleado_id}`);
                     setContratos(res.data);
                     cargarMarcaciones(p.empleado_id);
+                    cargarVacaciones();
                 }
             } catch (e: any) {
                 setError(e?.response?.data?.detail || 'No se pudieron cargar tus datos.');
@@ -150,6 +209,81 @@ export default function MiEspacio() {
                     <Dato label="ID de empleado" valor={perfil?.empleado_id ? `#${perfil.empleado_id}` : '—'} />
                 </div>
             </Card>
+
+            {/* Vacaciones (Fase 5): saldo, solicitud y seguimiento */}
+            {perfil?.empleado_id && (
+                <Card style={{ marginBottom: 28 }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.textStrong }}>Mis vacaciones</h3>
+
+                    {saldoVac && (
+                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+                            <KpiCard label="Días devengados" value={String(saldoVac.dias_devengados)} icon="calendar" />
+                            <KpiCard label="Días comprometidos" value={String(saldoVac.dias_comprometidos)} icon="clock" />
+                            <KpiCard
+                                label="Días disponibles"
+                                value={String(saldoVac.dias_disponibles)}
+                                icon="check"
+                                badge={saldoVac.dias_disponibles > 0 ? 'Disponible' : undefined}
+                                badgeTone="green"
+                            />
+                        </div>
+                    )}
+
+                    <form onSubmit={solicitarVacaciones} style={{
+                        display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap',
+                        marginBottom: 24, padding: 16, background: colors.bg, borderRadius: radius.md,
+                    }}>
+                        <div style={{ flex: '1 1 160px' }}>
+                            <Field label="Desde">
+                                <input type="date" value={fechaInicioVac} onChange={(e) => setFechaInicioVac(e.target.value)} style={inputStyle} required />
+                            </Field>
+                        </div>
+                        <div style={{ flex: '1 1 160px' }}>
+                            <Field label="Hasta">
+                                <input type="date" value={fechaFinVac} onChange={(e) => setFechaFinVac(e.target.value)} style={inputStyle} required />
+                            </Field>
+                        </div>
+                        <Btn type="submit" icon="plus" disabled={solicitandoVac}>{solicitandoVac ? 'Enviando…' : 'Solicitar vacaciones'}</Btn>
+                        <p style={{ margin: 0, fontSize: 11.5, color: colors.textFaint, width: '100%' }}>
+                            El descanso se fracciona en periodos mínimos de 7 días continuos.
+                        </p>
+                    </form>
+
+                    {misSolicitudes.length === 0 ? (
+                        <Empty text="Aún no has solicitado vacaciones." />
+                    ) : (
+                        <table style={tableStyles.table as React.CSSProperties}>
+                            <thead><tr>
+                                <th style={tableStyles.th as React.CSSProperties}>Desde</th>
+                                <th style={tableStyles.th as React.CSSProperties}>Hasta</th>
+                                <th style={tableStyles.th as React.CSSProperties}>Días</th>
+                                <th style={tableStyles.th as React.CSSProperties}>Estado</th>
+                                <th style={tableStyles.th as React.CSSProperties}></th>
+                            </tr></thead>
+                            <tbody>
+                                {misSolicitudes.map((s) => (
+                                    <tr key={s.solicitud_id}>
+                                        <td style={tableStyles.td as React.CSSProperties}>{s.fecha_inicio}</td>
+                                        <td style={tableStyles.td as React.CSSProperties}>{s.fecha_fin}</td>
+                                        <td style={tableStyles.td as React.CSSProperties}>{s.dias_solicitados}</td>
+                                        <td style={tableStyles.td as React.CSSProperties}>
+                                            <Badge tone={ESTADO_VAC_TONE[s.estado] || 'gray'}>{s.estado}</Badge>
+                                            {s.estado === 'Rechazada' && s.motivo_rechazo && (
+                                                <p style={{ margin: '4px 0 0', fontSize: 11, color: colors.textMuted }}>{s.motivo_rechazo}</p>
+                                            )}
+                                        </td>
+                                        <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right' }}>
+                                            {s.estado === 'Pendiente' && (
+                                                <Btn size="sm" variant="outline" onClick={() => cancelarSolicitudVac(s.solicitud_id)}>Cancelar</Btn>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </Card>
+            )}
 
             {/* Marcación remota (teletrabajo / campo) */}
             {perfil?.empleado_id && (

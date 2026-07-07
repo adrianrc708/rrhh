@@ -13,8 +13,10 @@ from src.database import Base
 # 2. Importamos todos tus modelos relacionales para que Alembic los detecte automáticamente
 from src.core.models import Empresa, Usuario, Nomina, Notificacion, EventoAuditoria, HistorialAprobacion
 from src.hr.models import Empleado, Departamento, Cargo, Contrato
+from src.hr.vacaciones_models import SolicitudVacaciones
 # Importamos los otros módulos por si tus compañeros añadieron algo
 from src.attendance.models import *
+from src.attendance.turno_models import Turno, AsignacionTurno
 from src.payroll.models import *
 
 # Objeto de configuración de Alembic
