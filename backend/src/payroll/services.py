@@ -9,6 +9,8 @@ from src.attendance.models import Inasistencia, TIPOS_QUE_DESCUENTAN
 from src.payroll.calculations import calcular_planilla_empleado
 from src.core.fiscal import cargar_parametros_fiscales
 from src.payroll.compliance import auditar_prenomina, contar_bloqueos
+from src.payroll.conceptos_models import ConceptoVariable
+from src.payroll.conceptos_calculo import calcular_aplicacion_periodo
 
 # RF-13: Máquina de estados
 TRANSICIONES_VALIDAS = {
@@ -166,6 +168,13 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
             HorasPeriodo.is_deleted.is_(False),
         ).first()
 
+        # Fase 5: comisiones (haber) y cuota de adelantos/préstamos (descuento) del periodo.
+        conceptos = db.query(ConceptoVariable).filter(
+            ConceptoVariable.empleado_id == empleado.empleado_id,
+            ConceptoVariable.is_deleted.is_(False),
+        ).all()
+        aplicacion = calcular_aplicacion_periodo(conceptos, periodo)
+
         # RF-11 + Fase 2: motor de cálculo
         resultado = calcular_planilla_empleado(
             sueldo_base=Decimal(str(contrato.sueldo_base)),
@@ -175,11 +184,18 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
             porcentaje_afp=Decimal(str(empleado.porcentaje_afp)) if empleado.porcentaje_afp else None,
             params=parametros_fiscales,
             perfil_contrato=contrato.perfil_contrato or "Comun",
+            haberes=aplicacion["comision"],
             horas_extra_25=Decimal(str(horas.horas_extra_25)) if horas else Decimal("0"),
             horas_extra_35=Decimal(str(horas.horas_extra_35)) if horas else Decimal("0"),
             horas_nocturnas=Decimal(str(horas.horas_nocturnas)) if horas else Decimal("0"),
             regimen=regimen,
         )
+
+        # Los adelantos/préstamos recuperan dinero ya entregado: se descuentan
+        # directo del neto, sin afectar la remuneración computable de pensión/IR.
+        descuento_prestamos = aplicacion["descuento_prestamos"]
+        descuentos_totales = resultado["total_descuentos"] + descuento_prestamos
+        sueldo_neto_final = resultado["sueldo_neto"] - descuento_prestamos
 
         db.add(DetalleNomina(
             nomina_id=nomina.id,
@@ -199,14 +215,15 @@ def consolidar_nomina(db: Session, nomina: Nomina, empresa_id: int) -> dict:
             tipo_pension=resultado["tipo_pension"],
             aporte_pension=resultado["aporte_pension"],
             impuesto_renta_5ta=resultado["impuesto_renta_5ta"],
-            descuentos=resultado["total_descuentos"],
-            sueldo_neto=resultado["sueldo_neto"],
+            descuento_prestamos=descuento_prestamos,
+            descuentos=descuentos_totales,
+            sueldo_neto=sueldo_neto_final,
             aporte_empleador_essalud=resultado["aporte_empleador_essalud"],
         ))
 
         total_ingresos += resultado["total_ingresos_brutos"]
-        total_descuentos += resultado["total_descuentos"]
-        total_neto += resultado["sueldo_neto"]
+        total_descuentos += descuentos_totales
+        total_neto += sueldo_neto_final
         total_essalud += resultado["aporte_empleador_essalud"]
 
     # RF-12: actualizar cabecera de nómina con los totales consolidados

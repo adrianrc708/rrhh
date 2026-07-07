@@ -4,6 +4,7 @@ import { colors, radius, font } from '../theme';
 import Icon from '../components/Icons';
 import { Card, PageHeader, Tabs, KpiCard, Badge, Btn, Loading, Empty, tableStyles, inputStyle, Field, Select, downloadCSV, useToast } from '../components/ui';
 import BeneficiosSocialesTab from '../components/BeneficiosSocialesTab';
+import ConceptosVariablesTab from '../components/ConceptosVariablesTab';
 
 const money = (n: any) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ESTADO_TONE: Record<string, any> = { Borrador: 'gray', Revision: 'amber', Aprobado: 'blue', Pagado: 'green' };
@@ -256,6 +257,7 @@ export default function Nomina() {
                             'Distribución de Boletas',
                             'Historial',
                             'Beneficios Sociales',
+                            'Conceptos Variables',
                         ]}
                         active={tab}
                         onChange={setTab}
@@ -433,6 +435,7 @@ export default function Nomina() {
                             )}
 
                             {tab === 'Beneficios Sociales' && <BeneficiosSocialesTab />}
+                            {tab === 'Conceptos Variables' && <ConceptosVariablesTab />}
                         </>
                     )}
                 </>

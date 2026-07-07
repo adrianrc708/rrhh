@@ -58,6 +58,17 @@ interface Beneficio {
     estado: string;
 }
 
+interface Concepto {
+    id: number;
+    tipo: string;
+    periodo: string;
+    monto: number;
+    cuotas: number;
+    estado: string;
+}
+
+const TIPO_CONCEPTO_TONE: Record<string, any> = { Comision: 'green', Adelanto: 'amber', Prestamo: 'blue' };
+
 const soles = (n: number | string) =>
     'S/ ' + Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -70,6 +81,7 @@ export default function MiEspacio() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
+    const [conceptos, setConceptos] = useState<Concepto[]>([]);
 
     // Fase 5 — Vacaciones (autogestión)
     const [saldoVac, setSaldoVac] = useState<SaldoVacacional | null>(null);
@@ -131,6 +143,7 @@ export default function MiEspacio() {
                     cargarMarcaciones(p.empleado_id);
                     cargarVacaciones();
                     api.get('/beneficios/mis-beneficios').then((r) => setBeneficios(r.data)).catch(() => setBeneficios([]));
+                    api.get('/conceptos/mis-conceptos').then((r) => setConceptos(r.data)).catch(() => setConceptos([]));
                 }
             } catch (e: any) {
                 setError(e?.response?.data?.detail || 'No se pudieron cargar tus datos.');
@@ -316,6 +329,37 @@ export default function MiEspacio() {
                                     <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right', fontWeight: 700, color: colors.textStrong }}>{soles(b.monto_neto)}</td>
                                     <td style={tableStyles.td as React.CSSProperties}>
                                         <Badge tone={b.estado === 'Pagado' ? 'green' : 'amber'}>{b.estado}</Badge>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Card>
+            )}
+
+            {/* Conceptos variables (Fase 5): comisiones, adelantos y préstamos */}
+            {conceptos.length > 0 && (
+                <Card style={{ marginBottom: 28 }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.textStrong }}>Comisiones, adelantos y préstamos</h3>
+                    <table style={tableStyles.table as React.CSSProperties}>
+                        <thead><tr>
+                            <th style={tableStyles.th as React.CSSProperties}>Tipo</th>
+                            <th style={tableStyles.th as React.CSSProperties}>Periodo</th>
+                            <th style={{ ...(tableStyles.th as React.CSSProperties), textAlign: 'right' }}>Monto</th>
+                            <th style={{ ...(tableStyles.th as React.CSSProperties), textAlign: 'right' }}>Cuotas</th>
+                            <th style={tableStyles.th as React.CSSProperties}>Estado</th>
+                        </tr></thead>
+                        <tbody>
+                            {conceptos.map((c) => (
+                                <tr key={c.id}>
+                                    <td style={tableStyles.td as React.CSSProperties}>
+                                        <Badge tone={TIPO_CONCEPTO_TONE[c.tipo] || 'gray'}>{c.tipo}</Badge>
+                                    </td>
+                                    <td style={tableStyles.td as React.CSSProperties}>{c.periodo}</td>
+                                    <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right', fontWeight: 700, color: colors.textStrong }}>{soles(c.monto)}</td>
+                                    <td style={{ ...(tableStyles.td as React.CSSProperties), textAlign: 'right' }}>{c.cuotas}</td>
+                                    <td style={tableStyles.td as React.CSSProperties}>
+                                        <Badge tone={c.estado === 'Activo' ? 'green' : 'gray'}>{c.estado}</Badge>
                                     </td>
                                 </tr>
                             ))}

@@ -20,6 +20,7 @@ from src.attendance.models import *
 from src.attendance.turno_models import Turno, AsignacionTurno
 from src.payroll.models import *
 from src.payroll.beneficios_models import BeneficioSocial
+from src.payroll.conceptos_models import ConceptoVariable
 
 # Objeto de configuración de Alembic
 config = context.config

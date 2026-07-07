@@ -57,6 +57,7 @@ def _construir_boleta(detalle: DetalleNomina, nomina: Nomina, db: Session) -> Bo
         tipo_pension=detalle.tipo_pension,
         aporte_pension=detalle.aporte_pension,
         impuesto_renta_5ta=detalle.impuesto_renta_5ta,
+        descuento_prestamos=detalle.descuento_prestamos,
         total_descuentos=detalle.descuentos,
         sueldo_neto=detalle.sueldo_neto,
         aporte_empleador_essalud=detalle.aporte_empleador_essalud,

@@ -79,6 +79,8 @@ class DetalleNomina(Base):
     tipo_pension = Column(String(10), nullable=True)
     aporte_pension = Column(Numeric(10, 2), nullable=True, default=0)
     impuesto_renta_5ta = Column(Numeric(10, 2), nullable=True, default=0)
+    # Fase 5: cuota de adelantos/préstamos descontada en este periodo
+    descuento_prestamos = Column(Numeric(10, 2), nullable=True, default=0)
     # Totales
     descuentos = Column(Numeric(10, 2), default=0.00)
     sueldo_neto = Column(Numeric(10, 2), nullable=False)

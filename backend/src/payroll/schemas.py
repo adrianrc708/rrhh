@@ -57,6 +57,8 @@ class BoletaEmpleado(BaseModel):
     tipo_pension: Optional[str] = None
     aporte_pension: Optional[Decimal] = None
     impuesto_renta_5ta: Optional[Decimal] = None
+    # Fase 5: cuota de adelantos/préstamos descontada en el periodo
+    descuento_prestamos: Optional[Decimal] = None
     # Totales
     total_descuentos: Decimal
     sueldo_neto: Decimal
