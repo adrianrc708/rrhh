@@ -5,6 +5,7 @@ import { Card, PageHeader, Tabs, Badge, Btn, Loading, Empty, tableStyles, downlo
 import FormularioEmpleado from '../components/FormularioEmpleado';
 import Estructura from '../components/Estructura';
 import Contratos from '../components/Contratos';
+import ModalDesempeno from '../components/ModalDesempeno';
 
 const soles = (n: number) => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -90,6 +91,7 @@ function Directorio() {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [empleadoEdit, setEmpleadoEdit] = useState<any | null>(null);
     const [empleadoLiquidar, setEmpleadoLiquidar] = useState<any | null>(null);
+    const [empleadoDesempeno, setEmpleadoDesempeno] = useState<any | null>(null);
 
     const cargar = async () => {
         try {
@@ -163,6 +165,7 @@ function Directorio() {
                                     <td style={{ ...tableStyles.td, textAlign: 'center' }}>
                                         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                                             <Btn size="sm" variant="outline" icon="edit" onClick={() => { setEmpleadoEdit(emp); setModalAbierto(true); }}>Editar</Btn>
+                                            <Btn size="sm" variant="outline" icon="sparkles" onClick={() => setEmpleadoDesempeno(emp)}>Desempeño</Btn>
                                             {emp.estado === 'Activo' ? (
                                                 <Btn size="sm" variant="danger" icon="trash" onClick={() => setEmpleadoLiquidar(emp)}>Baja</Btn>
                                             ) : (
@@ -189,6 +192,13 @@ function Directorio() {
                     empleado={empleadoLiquidar}
                     onClose={() => setEmpleadoLiquidar(null)}
                     onDone={cargar}
+                />
+            )}
+
+            {empleadoDesempeno && (
+                <ModalDesempeno
+                    empleado={empleadoDesempeno}
+                    onClose={() => setEmpleadoDesempeno(null)}
                 />
             )}
         </div>

@@ -16,6 +16,7 @@ from src.hr.models import Empleado, Departamento, Cargo, Contrato
 from src.hr.vacaciones_models import SolicitudVacaciones
 from src.hr.liquidacion_models import Liquidacion
 from src.hr.permiso_models import SolicitudPermiso
+from src.hr.desempeno_models import EvaluacionDesempeno, IncidenciaDisciplinaria
 # Importamos los otros módulos por si tus compañeros añadieron algo
 from src.attendance.models import *
 from src.attendance.turno_models import Turno, AsignacionTurno

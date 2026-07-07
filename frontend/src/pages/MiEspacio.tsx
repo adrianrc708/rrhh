@@ -87,6 +87,19 @@ interface Concepto {
 
 const TIPO_CONCEPTO_TONE: Record<string, any> = { Comision: 'green', Adelanto: 'amber', Prestamo: 'blue' };
 
+interface EvaluacionDesempeno {
+    id: number;
+    periodo: string;
+    puntaje_promedio: number;
+    comentarios: string | null;
+}
+
+interface IncidenciaKardex {
+    id: number;
+    tipo: string;
+    fecha: string;
+}
+
 const soles = (n: number | string) =>
     'S/ ' + Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -100,6 +113,8 @@ export default function MiEspacio() {
     const [error, setError] = useState<string | null>(null);
     const [beneficios, setBeneficios] = useState<Beneficio[]>([]);
     const [conceptos, setConceptos] = useState<Concepto[]>([]);
+    const [evaluaciones, setEvaluaciones] = useState<EvaluacionDesempeno[]>([]);
+    const [incidencias, setIncidencias] = useState<IncidenciaKardex[]>([]);
 
     // Fase 5 — Permisos y descansos médicos (autogestión con documento adjunto)
     const [misPermisos, setMisPermisos] = useState<SolicitudPermiso[]>([]);
@@ -208,6 +223,8 @@ export default function MiEspacio() {
                     api.get('/beneficios/mis-beneficios').then((r) => setBeneficios(r.data)).catch(() => setBeneficios([]));
                     api.get('/conceptos/mis-conceptos').then((r) => setConceptos(r.data)).catch(() => setConceptos([]));
                     cargarPermisos();
+                    api.get('/desempeno/mis-evaluaciones').then((r) => setEvaluaciones(r.data)).catch(() => setEvaluaciones([]));
+                    api.get('/desempeno/mis-incidencias').then((r) => setIncidencias(r.data)).catch(() => setIncidencias([]));
                 }
             } catch (e: any) {
                 setError(e?.response?.data?.detail || 'No se pudieron cargar tus datos.');
@@ -508,6 +525,39 @@ export default function MiEspacio() {
                             ))}
                         </tbody>
                     </table>
+                </Card>
+            )}
+
+            {/* Mi desempeño (Fase 5): evaluaciones y kardex, solo lectura */}
+            {(evaluaciones.length > 0 || incidencias.length > 0) && (
+                <Card style={{ marginBottom: 28 }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.textStrong }}>Mi desempeño</h3>
+                    {evaluaciones.length > 0 && (
+                        <div style={{ marginBottom: incidencias.length > 0 ? 20 : 0 }}>
+                            <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Evaluaciones</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {evaluaciones.map((e) => (
+                                    <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: colors.bg, borderRadius: radius.md }}>
+                                        <span style={{ fontSize: 13.5, color: colors.textStrong, fontWeight: 600 }}>{e.periodo}</span>
+                                        <Badge tone={e.puntaje_promedio >= 4 ? 'green' : e.puntaje_promedio >= 3 ? 'amber' : 'red'}>{e.puntaje_promedio.toFixed(2)} / 5.00</Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {incidencias.length > 0 && (
+                        <div>
+                            <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Kardex disciplinario</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {incidencias.map((i) => (
+                                    <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: colors.bg, borderRadius: radius.md }}>
+                                        <span style={{ fontSize: 13, color: colors.textStrong }}>{i.tipo.replace(/_/g, ' ')}</span>
+                                        <span style={{ fontSize: 12, color: colors.textMuted }}>{i.fecha}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </Card>
             )}
 
